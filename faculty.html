@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Faculty Scheduler — Faculty</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+<script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+</head>
+<body>
+
+<div id="chromeHeader"></div>
+<div id="chromeNav"></div>
+
+<main>
+  <div class="card">
+    <h2 id="facultyFormTitle">Add Faculty</h2>
+    <div class="hint">Educational qualifications and designations accept multiple entries — one per line.</div>
+    <div class="form-grid">
+      <div class="field"><label>Name of Faculty</label><input type="text" id="facName" placeholder="e.g. Dr. Juan D. Cruz"></div>
+      <div class="field"><label>Academic Rank</label>
+        <select id="facRank">
+          <option value="Instructor I">Instructor I</option>
+          <option value="Instructor II">Instructor II</option>
+          <option value="Instructor III">Instructor III</option>
+          <option value="Assistant Professor I">Assistant Professor I</option>
+          <option value="Assistant Professor II">Assistant Professor II</option>
+          <option value="Associate Professor I">Associate Professor I</option>
+          <option value="Associate Professor II">Associate Professor II</option>
+          <option value="Professor I">Professor I</option>
+          <option value="Professor II">Professor II</option>
+          <option value="Part-Time Instructor">Part-Time Instructor</option>
+        </select>
+      </div>
+      <div class="field wide"><label>Educational Qualification (one per line)</label>
+        <textarea id="facQuals" placeholder="Bachelor of Science in Information Technology&#10;Master of Information Technology"></textarea>
+      </div>
+      <div class="field wide"><label>Designation w/ Equivalent Units (one per line)</label>
+        <textarea id="facDesigs" placeholder="Program Chair — 6 units&#10;Research Coordinator — 3 units"></textarea>
+      </div>
+    </div>
+    <div class="row">
+      <button class="btn btn-primary" id="facSaveBtn">Add Faculty</button>
+      <button class="btn" id="facCancelBtn" style="display:none;">Cancel Edit</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Bulk Import Faculty</h2>
+    <div class="hint">Paste rows copied from a spreadsheet (tab-separated) or comma-separated text, one faculty member per line: <strong>Name, Rank, Qualifications, Designations</strong>. Separate multiple qualifications/designations within a cell using semicolons ( ; ).</div>
+    <textarea id="facBulkText" rows="4" placeholder="Dr. Juan Cruz, Professor I, BS Computer Science; MS Info Tech, Program Chair - 6 units&#10;Prof. Maria Santos, Instructor II, BS Education,"></textarea>
+    <div class="row" style="margin-top:10px;">
+      <button class="btn btn-teal" id="facBulkImportBtn">Import Rows</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Faculty List</h2>
+    <table>
+      <thead><tr><th style="width:16%">Name</th><th style="width:14%">Rank</th><th style="width:20%">Qualifications</th><th style="width:20%">Designations</th><th style="width:16%">External Schedule</th><th style="width:10%">Actions</th></tr></thead>
+      <tbody id="facultyTableBody"></tbody>
+    </table>
+    <div id="facultyEmpty" class="empty-msg hidden">No faculty added yet.</div>
+  </div>
+</main>
+
+<div id="chromeFooter"></div>
+
+<script type="module" src="js/faculty.js"></script>
+</body>
+</html>

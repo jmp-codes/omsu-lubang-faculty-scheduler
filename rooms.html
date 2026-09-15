@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Faculty Scheduler — Rooms</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+<script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+</head>
+<body>
+
+<div id="chromeHeader"></div>
+<div id="chromeNav"></div>
+
+<main>
+  <div class="card">
+    <h2 id="roomFormTitle">Add Room</h2>
+    <div class="form-grid">
+      <div class="field"><label>Room Name</label><input type="text" id="roomName" placeholder="e.g. Room 204"></div>
+      <div class="field"><label>Type</label>
+        <select id="roomType"><option value="lecture">Lecture Room</option><option value="lab">Laboratory</option></select>
+      </div>
+      <div class="field"><label>Maximum Students</label><input type="number" id="roomCapacity" min="0" placeholder="e.g. 40"></div>
+    </div>
+    <div class="row">
+      <button class="btn btn-primary" id="roomSaveBtn">Add Room</button>
+      <button class="btn" id="roomCancelBtn" style="display:none;">Cancel Edit</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Bulk Import Rooms</h2>
+    <div class="hint">One room per line: <strong>Name, Type (lecture/lab), Maximum Students</strong>. Tab- or comma-separated.</div>
+    <textarea id="roomBulkText" rows="4" placeholder="Room 101, lecture, 40&#10;Lab 1, lab, 30"></textarea>
+    <div class="row" style="margin-top:10px;">
+      <button class="btn btn-teal" id="roomBulkImportBtn">Import Rows</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Room List</h2>
+    <table>
+      <thead><tr><th>Name</th><th>Type</th><th>Max Students</th><th style="width:120px;">Actions</th></tr></thead>
+      <tbody id="roomsTableBody"></tbody>
+    </table>
+    <div id="roomsEmpty" class="empty-msg hidden">No rooms added yet.</div>
+  </div>
+</main>
+
+<div id="chromeFooter"></div>
+
+<script type="module" src="js/rooms.js"></script>
+</body>
+</html>

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Faculty Scheduler — Assign Instructors</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+<script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+</head>
+<body>
+
+<div id="chromeHeader"></div>
+<div id="chromeNav"></div>
+
+<main>
+  <div class="card">
+    <h2>Assign Instructors</h2>
+    <div class="hint">Grouped by subject. Use the bulk dropdown to assign one instructor to every section below it, or set individual instructors per section.</div>
+    <div id="assignGroups"></div>
+    <div id="assignEmpty" class="empty-msg hidden">Add subjects to sections first before assigning instructors.</div>
+  </div>
+</main>
+
+<div id="chromeFooter"></div>
+
+<script type="module" src="js/assign.js"></script>
+</body>
+</html>

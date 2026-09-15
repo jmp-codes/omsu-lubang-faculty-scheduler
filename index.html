@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Faculty Scheduler — Home</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+<script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+</head>
+<body>
+
+<div id="chromeHeader"></div>
+<div id="chromeNav"></div>
+
+<main>
+  <div class="card">
+    <h2>Welcome</h2>
+    <div class="hint">This tool manages faculty, subjects, rooms and sections, then auto-generates a Mon–Sat weekly schedule with no conflicts. Each section below is its own page — data is shared between them automatically.</div>
+    <div class="home-grid" id="homeGrid"></div>
+  </div>
+
+  <div class="card">
+    <h2>Suggested Order</h2>
+    <div class="hint">For a new term, it's easiest to work through the pages in this order:</div>
+    <div style="font-size:13.5px; line-height:1.9;">
+      1. <strong>Faculty</strong> — add instructors (or bulk-import them)<br>
+      2. <strong>Subjects</strong> — add subjects with units and hours<br>
+      3. <strong>Rooms</strong> — add lecture rooms and labs with capacity<br>
+      4. <strong>Sections</strong> — create sections and attach subjects to each<br>
+      5. <strong>Assign Instructors</strong> — assign a faculty member to every section/subject pair<br>
+      6. <strong>Generate Schedule</strong> — auto-generate, review, and adjust
+    </div>
+  </div>
+</main>
+
+<div id="chromeFooter"></div>
+
+<script type="module" src="js/home.js"></script>
+</body>
+</html>

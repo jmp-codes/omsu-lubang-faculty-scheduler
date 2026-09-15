@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Faculty Scheduler — Generate Schedule</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+<script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+</head>
+<body>
+
+<div id="chromeHeader"></div>
+<div id="chromeNav"></div>
+
+<main>
+  <div class="card">
+    <h2>Year-Level Time Preference</h2>
+    <div class="hint">Applies to lecture blocks only. Laboratory sessions are placed wherever fits best, regardless of this setting.</div>
+    <div id="yearPrefBody" class="row"></div>
+  </div>
+
+  <div class="card">
+    <h2>Generate</h2>
+    <div class="row">
+      <button class="btn btn-primary" id="generateBtn">Generate Schedule</button>
+      <button class="btn btn-danger" id="clearScheduleBtn">Clear Schedule</button>
+      <button class="btn" id="revertScheduleBtn" disabled title="Swap back to the schedule that was in place before the last Generate or Clear">Revert to Previous Schedule</button>
+    </div>
+    <div id="genWarnings"></div>
+    <div class="stat-row" id="genStats" style="margin-top:12px;"></div>
+  </div>
+
+  <div class="card" id="missingCard" style="display:none;">
+    <h2>Unscheduled Sessions</h2>
+    <div class="hint">These sessions could not be auto-placed, or were removed manually. Place them by hand.</div>
+    <ul class="miss-list" id="missingList"></ul>
+  </div>
+
+  <div class="card" id="facultyLoadCard" style="display:none;">
+    <h2>Faculty Load Summary</h2>
+    <div class="hint">Teaching hours come from the generated schedule; admin/equivalent units are parsed from each faculty member's designation text (looks for a number followed by "unit(s)").</div>
+    <table>
+      <thead><tr><th>Faculty</th><th>Rank</th><th>Teaching Hrs/wk</th><th>External Hrs/wk</th><th>Admin/Equiv. Units</th><th>Total Load</th></tr></thead>
+      <tbody id="facultyLoadBody"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="toolbar">
+      <h2 style="margin:0;">Weekly Schedule</h2>
+      <div class="group view-tabs" id="viewTabs">
+        <button class="btn btn-sm active" data-view="section">By Section</button>
+        <button class="btn btn-sm" data-view="faculty">By Faculty</button>
+        <button class="btn btn-sm" data-view="room">By Room</button>
+        <button class="btn btn-sm" data-view="all">Full View (All)</button>
+      </div>
+    </div>
+    <div class="toolbar">
+      <div class="group" id="filterGroup">
+        <select id="filterSelect"></select>
+      </div>
+      <div class="group">
+        <button class="btn btn-sm" id="printScheduleBtn">Print / Save as PDF</button>
+        <button class="btn btn-sm" id="exportCsvBtn">Export CSV</button>
+      </div>
+    </div>
+    <div id="scheduleView"></div>
+  </div>
+</main>
+
+<div id="chromeFooter"></div>
+
+<div id="modalRoot"></div>
+
+<script type="module" src="js/schedule.js"></script>
+</body>
+</html>

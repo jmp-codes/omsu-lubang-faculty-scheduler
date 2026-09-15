@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Faculty Scheduler — Subjects</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+<script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+</head>
+<body>
+
+<div id="chromeHeader"></div>
+<div id="chromeNav"></div>
+
+<main>
+  <div class="card">
+    <h2 id="subjFormTitle">Add Subject</h2>
+    <div class="form-grid">
+      <div class="field"><label>Subject Code</label><input type="text" id="subjCode" placeholder="e.g. CS 101"></div>
+      <div class="field wide"><label>Subject Name</label><input type="text" id="subjName" placeholder="e.g. Introduction to Computing"></div>
+      <div class="field"><label>Year Level</label>
+        <select id="subjYear">
+          <option value="1">1st Year</option><option value="2">2nd Year</option><option value="3">3rd Year</option>
+          <option value="4">4th Year</option><option value="5">5th Year</option>
+        </select>
+      </div>
+      <div class="field"><label>Units</label><input type="number" id="subjUnits" min="0" step="0.5" value="3"></div>
+      <div class="field"><label>Type</label>
+        <select id="subjType">
+          <option value="lecture">Lecture only</option>
+          <option value="lab">Laboratory (lecture + lab)</option>
+        </select>
+      </div>
+      <div class="field"><label>Lecture Hours / week</label><input type="number" id="subjLecHours" min="0" step="0.5" value="3"></div>
+      <div class="field" id="subjLabHoursField" style="display:none;"><label>Lab Hours / week</label><input type="number" id="subjLabHours" min="0" step="0.5" value="3"></div>
+    </div>
+    <div class="row">
+      <button class="btn btn-primary" id="subjSaveBtn">Add Subject</button>
+      <button class="btn" id="subjCancelBtn" style="display:none;">Cancel Edit</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Bulk Import Subjects</h2>
+    <div class="hint">One subject per line: <strong>Code, Name, Year (1-5), Units, Type (lecture/lab), Lecture Hours, Lab Hours</strong>. Lab Hours may be left blank for lecture-only subjects. Tab- or comma-separated.</div>
+    <textarea id="subjBulkText" rows="4" placeholder="CS101, Intro to Computing, 1, 3, lecture, 3&#10;CS102, Programming Lab, 1, 3, lab, 2, 3"></textarea>
+    <div class="row" style="margin-top:10px;">
+      <button class="btn btn-teal" id="subjBulkImportBtn">Import Rows</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Subjects by Year Level</h2>
+    <div id="subjectsGroups"></div>
+    <div id="subjectsEmpty" class="empty-msg hidden">No subjects added yet.</div>
+  </div>
+</main>
+
+<div id="chromeFooter"></div>
+
+<script type="module" src="js/subjects.js"></script>
+</body>
+</html>

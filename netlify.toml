@@ -1,0 +1,20 @@
+[build]
+  command = "npm install --prefix netlify/functions"
+  publish = "."
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+  force = true
+
+# Block public access to the function source files themselves (they'd
+# otherwise be servable as plain static files since publish="."). This does
+# NOT affect the /api/* -> /.netlify/functions/ redirect above, which is a
+# separate, Netlify-managed path.
+[[redirects]]
+  from = "/netlify/*"
+  to = "/404.html"
+  status = 404
+  force = true

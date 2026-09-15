@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Faculty Scheduler — Sections</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+<script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+</head>
+<body>
+
+<div id="chromeHeader"></div>
+<div id="chromeNav"></div>
+
+<main>
+  <div class="card">
+    <h2>Add Section</h2>
+    <div class="form-grid">
+      <div class="field"><label>Section Name</label><input type="text" id="secName" placeholder="e.g. BSIT 2A"></div>
+      <div class="field"><label>Year Level</label>
+        <select id="secYear">
+          <option value="1">1st Year</option><option value="2">2nd Year</option><option value="3">3rd Year</option>
+          <option value="4">4th Year</option><option value="5">5th Year</option>
+        </select>
+      </div>
+      <div class="field"><label>Number of Students</label><input type="number" id="secCount" min="0" placeholder="e.g. 35"></div>
+    </div>
+    <div class="row"><button class="btn btn-primary" id="secSaveBtn">Add Section</button></div>
+  </div>
+
+  <div class="card">
+    <h2>Bulk Import Sections</h2>
+    <div class="hint">One section per line: <strong>Name, Year (1-5), Number of Students, Subject Codes</strong>. List multiple subject codes in a cell separated by semicolons ( ; ) — they're matched against existing subject codes (case-insensitive); unmatched codes are skipped and reported.</div>
+    <textarea id="secBulkText" rows="4" placeholder="BSIT 1A, 1, 35, CS101; CS102&#10;BSIT 1B, 1, 32, CS101; CS102"></textarea>
+    <div class="row" style="margin-top:10px;">
+      <button class="btn btn-teal" id="secBulkImportBtn">Import Rows</button>
+    </div>
+  </div>
+
+  <div class="card" id="syncPanelCard" style="display:none;">
+    <h2>Same-Time Scheduling</h2>
+    <div class="hint">When 2 or more sections of the same year take the same subject, choose whether the generator should try placing them at the same day/time (different rooms, possibly different instructors).</div>
+    <div id="syncPanelBody"></div>
+  </div>
+
+  <div class="card">
+    <h2>Sections</h2>
+    <div id="sectionsList"></div>
+    <div id="sectionsEmpty" class="empty-msg hidden">No sections added yet.</div>
+  </div>
+</main>
+
+<div id="chromeFooter"></div>
+
+<script type="module" src="js/sections.js"></script>
+</body>
+</html>
