@@ -124,6 +124,28 @@ function stopWidgetFixPolling(){
   if(widgetFixIntervalId){ clearInterval(widgetFixIntervalId); widgetFixIntervalId = null; }
 }
 
+// Belt-and-suspenders on top of all of the above: once we're actually past
+// the login gate, the widget's iframe should NEVER be visible again on
+// this page — there's nothing left for it to do. Rather than keep chasing
+// every timing quirk in the widget's own internals that can leave it
+// (invisibly, silently) sitting on top of the page eating clicks, this
+// permanently forces it hidden the moment login succeeds, and a
+// MutationObserver keeps re-hiding it if the widget's own code ever
+// flips it back to visible afterward for any reason.
+function neutralizeWidgetFrames(){
+  document.querySelectorAll('iframe#netlify-identity-widget').forEach(f=>{
+    f.style.setProperty('display','none','important');
+    f.style.setProperty('pointer-events','none','important');
+  });
+}
+let widgetFrameObserver = null;
+function lockDownWidgetFrames(){
+  neutralizeWidgetFrames();
+  if(widgetFrameObserver) return;
+  widgetFrameObserver = new MutationObserver(neutralizeWidgetFrames);
+  widgetFrameObserver.observe(document.body, {childList:true, subtree:true, attributes:true, attributeFilter:['style']});
+}
+
 async function requireLogin(){
   const ni = await waitForIdentityWidget();
   if(!ni){
@@ -132,7 +154,7 @@ async function requireLogin(){
   }
   return new Promise((resolve)=>{
     ni.on('init', user=>{ if(user) resolve(user); else ni.open('login'); });
-    ni.on('login', user=>{ stopWidgetFixPolling(); ni.close(); resolve(user); });
+    ni.on('login', user=>{ stopWidgetFixPolling(); ni.close(); neutralizeWidgetFrames(); resolve(user); });
     // Fires whenever the modal closes for any reason — including our own
     // ni.close() right after a successful login above, so only react to it
     // when the person closed it (the "X") WITHOUT ever signing in.
@@ -666,6 +688,7 @@ export async function bootSession(activeKey){
     return false;
   }
   renderChrome(activeKey);
+  lockDownWidgetFrames();
   return true;
 }
 
