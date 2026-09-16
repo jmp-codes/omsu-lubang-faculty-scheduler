@@ -7,8 +7,9 @@
 /* ============================= CONSTANTS ============================= */
 export const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat"];
 export const DAY_NAMES = {Mon:"Monday",Tue:"Tuesday",Wed:"Wednesday",Thu:"Thursday",Fri:"Friday",Sat:"Saturday"};
-export const DAY_START = 7;   // 7:00 AM
-export const DAY_END   = 21;  // 9:00 PM
+export const DAY_START = 7.5;  // 7:30 AM — the earliest any class may ever start
+export const DAY_END   = 20.5; // 8:30 PM — no class may run past this
+export const TIME_STEP = 0.5;  // granularity of schedulable start times (30 min)
 export const YEAR_LABELS = {1:"1st Year",2:"2nd Year",3:"3rd Year",4:"4th Year",5:"5th Year"};
 export const DEPARTMENTS = ["BSIT","BSBA-OM","BEEd"];
 
@@ -370,6 +371,16 @@ export function segmentBlockId(sectionId, subjectId, segType){
   return sectionId+"::"+subjectId+"::"+segType;
 }
 
+// The very first slot of the day (7:30 AM) and the last stretch before the
+// 8:30 PM cutoff are technically allowed but should be used only as a last
+// resort — the registrar would rather a class start at 8:00 AM or later,
+// and end well before 8:30 PM, whenever there's any other option. This is
+// a soft de-prioritization (these slots are still tried, just last), never
+// a hard block.
+function isEdgeHour(h){
+  return h === DAY_START || h >= DAY_END - 1;
+}
+
 export function candidateStartHours(segType, year){
   const yearPref = state.yearPref[year] || 'none';
   // Labs get pushed toward the OPPOSITE time of day from that year's
@@ -384,15 +395,24 @@ export function candidateStartHours(segType, year){
     : yearPref==='afternoon' ? 'morning'
     : 'none';
   const all = [];
-  for(let h=DAY_START; h<DAY_END; h++) all.push(h);
-  if(pref==='morning') return all;
-  if(pref==='afternoon') return all.slice().sort((a,b)=>{
-    const aAft = a>=13, bAft = b>=13;
-    if(aAft && !bAft) return -1;
-    if(!aAft && bAft) return 1;
-    return a-b;
-  });
-  return all;
+  for(let h=DAY_START; h<DAY_END; h+=TIME_STEP) all.push(h);
+  let ordered;
+  if(pref==='afternoon'){
+    ordered = all.slice().sort((a,b)=>{
+      const aAft = a>=13, bAft = b>=13;
+      if(aAft && !bAft) return -1;
+      if(!aAft && bAft) return 1;
+      return a-b;
+    });
+  } else {
+    ordered = all;
+  }
+  // Stable partition: keep the existing (morning/afternoon-aware) order for
+  // every "core" hour, and push the day's opening/closing edge slots to try
+  // last, without disturbing anything else's relative order.
+  const core = ordered.filter(h=>!isEdgeHour(h));
+  const edge = ordered.filter(isEdgeHour);
+  return [...core, ...edge];
 }
 
 // Orders the week by how many hours are already scheduled on each day
