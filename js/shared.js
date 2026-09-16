@@ -81,12 +81,25 @@ function fixDuplicateWidgetFrame(){
 // Shown if the person closes the login/signup modal (the "X" button)
 // without actually signing in. Without this, there was no way to get the
 // modal back afterward short of reloading the whole page.
+//
+// IMPORTANT: this must NOT do document.body.innerHTML = ... — the widget's
+// own iframe lives in <body>, and replacing the whole body wipes it out of
+// the document. The widget object still thinks that (now-detached) iframe
+// exists, so a later ni.open('login') silently does nothing. Instead we
+// add an overlay alongside the existing content rather than replacing it.
 function showSignInPrompt(ni){
-  document.body.innerHTML = `<div class="empty-msg" style="margin:60px auto; max-width:420px; text-align:center;">
+  const old = document.getElementById('signInPromptOverlay');
+  if(old) old.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'signInPromptOverlay';
+  overlay.style.cssText = 'position:fixed; inset:0; z-index:90; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.55);';
+  overlay.innerHTML = `<div class="empty-msg" style="background:#fff; padding:32px; border-radius:10px; max-width:360px; text-align:center;">
     <p>Please sign in to continue.</p>
     <button class="btn" id="reopenLoginBtn">Log In / Sign Up</button>
   </div>`;
+  document.body.appendChild(overlay);
   document.getElementById('reopenLoginBtn').addEventListener('click', function(){
+    overlay.remove();
     ni.open('login');
     const iv = setInterval(fixDuplicateWidgetFrame, 150);
     setTimeout(()=>clearInterval(iv), 8000);
