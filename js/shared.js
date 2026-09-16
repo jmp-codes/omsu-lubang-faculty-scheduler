@@ -17,7 +17,7 @@ export function uid(prefix){ return prefix + "_" + Math.random().toString(36).sl
 export function defaultState(){
   return {
     faculty: [],     // {id,name,rank,qualifications:[],designations:[],externalBusy:[{id,day,start,duration,label}],department}
-    subjects: [],    // {id,code,name,year,units,type,lecHours,labHours,department}
+    subjects: [],    // {id,code,name,year,units,type,lecHours,labHours,department,semester,curriculum,archived,preferSaturday}
     rooms: [],       // {id,name,type,capacity} — shared/registrar-owned
     sections: [],    // {id,name,year,studentCount,subjectIds:[],department}
     assignments: {}, // `${sectionId}::${subjectId}` -> facultyId — shared/registrar-owned
@@ -371,7 +371,18 @@ export function segmentBlockId(sectionId, subjectId, segType){
 }
 
 export function candidateStartHours(segType, year){
-  const pref = segType==='lecture' ? (state.yearPref[year]||'none') : 'none';
+  const yearPref = state.yearPref[year] || 'none';
+  // Labs get pushed toward the OPPOSITE time of day from that year's
+  // lecture preference where one is set — a year that prefers morning
+  // lectures gets its labs nudged toward the afternoon, and vice versa —
+  // so the two don't end up competing for the same rooms/hours. This is
+  // still just an ordering of candidate start times (a soft preference),
+  // not a hard rule: if the opposite half of the day has no room left,
+  // placement still falls back to whatever slot actually works.
+  const pref = segType==='lecture' ? yearPref
+    : yearPref==='morning' ? 'afternoon'
+    : yearPref==='afternoon' ? 'morning'
+    : 'none';
   const all = [];
   for(let h=DAY_START; h<DAY_END; h++) all.push(h);
   if(pref==='morning') return all;
@@ -393,11 +404,20 @@ export function candidateStartHours(segType, year){
 // looking like it "stops" partway through the week even though nothing
 // requires that. Recomputed fresh from state.schedule each call so it
 // always reflects what's been placed so far in this generation pass.
-function daysByLoad(){
+//
+// `preferDay`, when given (e.g. "Sat" for a subject like NSTP/PE that's
+// flagged to prefer Saturdays — see subj.preferSaturday), is tried FIRST
+// regardless of load; the rest of the week still falls back to
+// least-busy-first if that day doesn't actually have room/time available.
+function daysByLoad(preferDay){
   const load = {};
   DAYS.forEach(d=>{ load[d] = 0; });
   state.schedule.forEach(b=>{ load[b.day] = (load[b.day]||0) + b.duration; });
-  return DAYS.slice().sort((a,b)=> load[a]-load[b] || DAYS.indexOf(a)-DAYS.indexOf(b));
+  const ordered = DAYS.slice().sort((a,b)=> load[a]-load[b] || DAYS.indexOf(a)-DAYS.indexOf(b));
+  if(preferDay && ordered.includes(preferDay)){
+    return [preferDay, ...ordered.filter(d=>d!==preferDay)];
+  }
+  return ordered;
 }
 
 export function findRoomFor(subjType, studentCount, day, start, duration, excludeBlockId){
@@ -414,7 +434,7 @@ export function findRoomFor(subjType, studentCount, day, start, duration, exclud
 export function tryPlaceSegment(sec, subj, facultyId, segType, hours, warnings){
   const blockId = segmentBlockId(sec.id, subj.id, segType);
   const starts = candidateStartHours(segType, sec.year);
-  for(const day of daysByLoad()){
+  for(const day of daysByLoad(subj.preferSaturday ? 'Sat' : null)){
     for(const start of starts){
       if(start+hours > DAY_END) continue;
       const test = {day, start, duration:hours, sectionId:sec.id, facultyId, roomId:null};
@@ -456,7 +476,7 @@ export function trySyncGroup(year, subjectId, sections, warnings){
     const starts = candidateStartHours(segType, year);
     let placed = false;
     outer:
-    for(const day of daysByLoad()){
+    for(const day of daysByLoad(subj.preferSaturday ? 'Sat' : null)){
       for(const start of starts){
         if(start+hours > DAY_END) continue;
         const usedRooms = new Set();
@@ -469,257 +489,4 @@ export function trySyncGroup(year, subjectId, sections, warnings){
           const roomType = segType;
           const room = state.rooms.find(r=> r.type===roomType && (!r.capacity || r.capacity>=p.sec.studentCount) && !usedRooms.has(r.id)
             && !state.schedule.some(b=>b.blockId!==blockId && b.roomId===r.id && b.day===day && overlaps(b.start,b.duration,start,hours)));
-          if(!room){ ok=false; break; }
-          usedRooms.add(room.id);
-          plan.push({p, blockId, room});
-        }
-        if(ok){
-          plan.forEach(({p,blockId,room})=>{
-            state.schedule.push({
-              blockId, day, start, duration:hours, type:segType,
-              sectionId:p.sec.id, sectionName:p.sec.name,
-              subjectId: subj.id, subject: subj.code+" — "+subj.name,
-              facultyId:p.facultyId, roomId:room.id, roomName:room.name,
-              synced:true, manual:false
-            });
-          });
-          placed = true;
-          break outer;
-        }
-      }
-    }
-    if(!placed){
-      warnings.push(`Same-time scheduling for ${subj.code} (${YEAR_LABELS[year]}) wasn't feasible — placing sections independently instead.`);
-      readyParts.forEach(p=> tryPlaceSegment(p.sec, subj, p.facultyId, segType, hours, warnings));
-    }
-    parts.filter(p=>!p.facultyId).forEach(p=> warnings.push(`${subj.code} (${p.sec.name}) has no instructor assigned — skipped.`));
-  });
-}
-
-export function backupSchedule(){
-  state.previousSchedule = state.schedule.slice();
-  state.previousManualRemoved = Object.assign({}, state.manualRemoved);
-  state.hasScheduleBackup = true;
-}
-export function revertSchedule(){
-  const curSchedule = state.schedule;
-  const curManualRemoved = state.manualRemoved;
-  state.schedule = state.previousSchedule;
-  state.manualRemoved = state.previousManualRemoved;
-  state.previousSchedule = curSchedule;
-  state.previousManualRemoved = curManualRemoved;
-  persistSharedData();
-}
-
-export function generateSchedule(){
-  backupSchedule();
-  state.schedule = [];
-  const warnings = [];
-
-  const syncGroups = {};
-  state.sections.forEach(sec=>{
-    sec.subjectIds.forEach(subjId=>{
-      const key = syncKey(sec.year, subjId);
-      (syncGroups[key] = syncGroups[key]||{year:sec.year, subjectId:subjId, sections:[]}).sections.push(sec);
-    });
-  });
-  const handledOfferings = new Set();
-  Object.values(syncGroups).forEach(g=>{
-    if(g.sections.length>=2 && state.syncPref[syncKey(g.year,g.subjectId)]){
-      trySyncGroup(g.year, g.subjectId, g.sections, warnings);
-      g.sections.forEach(sec=> handledOfferings.add(assignKey(sec.id,g.subjectId)));
-    }
-  });
-
-  const offerings = buildOfferings().filter(o=>!handledOfferings.has(assignKey(o.section.id,o.subject.id)));
-  offerings.sort((a,b)=> b.totalHours - a.totalHours);
-  offerings.forEach(o=>{
-    if(!o.facultyId){
-      warnings.push(`${o.subject.code} (${o.section.name}) has no instructor assigned — skipped.`);
-      return;
-    }
-    const segs = o.segments.slice().sort((a,b)=>b.hours-a.hours);
-    segs.forEach(seg=>{
-      tryPlaceSegment(o.section, o.subject, o.facultyId, seg.segType, seg.hours, warnings);
-    });
-  });
-
-  state.manualRemoved = {};
-  persistSharedData();
-  return warnings;
-}
-
-export function expectedBlockIds(){
-  const ids = [];
-  state.sections.forEach(sec=>{
-    sec.subjectIds.forEach(subjId=>{
-      const subj = subjectById(subjId);
-      if(!subj) return;
-      if(!state.assignments[assignKey(sec.id,subjId)]) return;
-      if(subj.type==='lab'){
-        if(subj.labHours>0) ids.push({blockId:segmentBlockId(sec.id,subjId,'lab'), sec, subj, segType:'lab', hours:subj.labHours});
-        if(subj.lecHours>0) ids.push({blockId:segmentBlockId(sec.id,subjId,'lecture'), sec, subj, segType:'lecture', hours:subj.lecHours});
-      } else if(subj.lecHours>0){
-        ids.push({blockId:segmentBlockId(sec.id,subjId,'lecture'), sec, subj, segType:'lecture', hours:subj.lecHours});
-      }
-    });
-  });
-  return ids;
-}
-
-export function computeMissing(){
-  const expected = expectedBlockIds();
-  const placedIds = new Set(state.schedule.map(b=>b.blockId));
-  return expected.filter(e=>!placedIds.has(e.blockId));
-}
-
-export function parseAdminUnits(designations){
-  let total = 0;
-  (designations||[]).forEach(d=>{
-    const matches = String(d).matchAll(/(\d+(\.\d+)?)\s*units?/gi);
-    for(const m of matches) total += parseFloat(m[1]);
-  });
-  return total;
-}
-
-/* ============================================================
-   CHROME — shared header + nav injected into every page
-   ============================================================ */
-const NAV_ITEMS = [
-  {key:'home', href:'index.html', label:'Home', roles:['registrar','chair']},
-  {key:'faculty', href:'faculty.html', label:'Faculty', roles:['registrar','chair']},
-  {key:'subjects', href:'subjects.html', label:'Subjects', roles:['registrar','chair']},
-  {key:'sections', href:'sections.html', label:'Sections', roles:['registrar','chair']},
-  {key:'rooms', href:'rooms.html', label:'Rooms', roles:['registrar']},
-  {key:'assign', href:'assign.html', label:'Assign Instructors', roles:['registrar']},
-  {key:'schedule', href:'schedule.html', label:'Generate Schedule', roles:['registrar']}
-];
-
-function renderChrome(activeKey){
-  const headerMount = document.getElementById('chromeHeader');
-  const navMount = document.getElementById('chromeNav');
-  const footerMount = document.getElementById('chromeFooter');
-  const roleLabel = session.isRegistrar ? "Registrar" : (session.department ? session.department + " Program Chair" : "");
-
-  if(headerMount){
-    headerMount.innerHTML = `
-      <header class="app-header">
-        <div class="row" style="justify-content:space-between; align-items:flex-start;">
-          <div>
-            <h1>Faculty Scheduler</h1>
-            <div class="sub">Faculty, subjects, rooms &amp; sections — auto-generated weekly schedule</div>
-          </div>
-          <div class="row" style="flex:none; align-items:center;">
-            <div class="user-badge">
-              <div><strong>${escapeHtml(session.email||'')}</strong></div>
-              <div class="muted" style="font-size:12px;">${escapeHtml(roleLabel)}</div>
-            </div>
-            <button class="btn btn-sm" id="exportDataBtn" title="Download the data currently loaded on this page as a JSON file">Export Data</button>
-            <button class="btn btn-sm" id="logoutBtn">Log Out</button>
-          </div>
-        </div>
-        <div id="deptBar"></div>
-      </header>
-    `;
-    document.getElementById('exportDataBtn').addEventListener('click', function(){
-      const stamp = new Date().toISOString().slice(0,10);
-      downloadTextFile("faculty-scheduler-"+activeKey+"-"+stamp+".json", "application/json", JSON.stringify(state, null, 2));
-    });
-    document.getElementById('logoutBtn').addEventListener('click', async function(){
-      const ni = await waitForIdentityWidget();
-      // logout() makes a network call to invalidate the session — it must
-      // be awaited, otherwise the next page loads before the old session
-      // is actually cleared and just sees the same stale logged-in user.
-      if(ni){ try{ await ni.logout(); }catch(e){} }
-      location.href = 'index.html';
-    });
-  }
-  if(navMount){
-    const visible = NAV_ITEMS.filter(item=> session.isRegistrar ? item.roles.includes('registrar') : item.roles.includes('chair'));
-    navMount.innerHTML = `<nav class="tabs">` +
-      visible.map(item=>`<a href="${item.href}" class="${item.key===activeKey?'active':''}">${item.label}</a>`).join("") +
-      `</nav>`;
-  }
-  if(footerMount){
-    footerMount.innerHTML = `<div class="footer-note">Faculty Scheduler · signed in as ${escapeHtml(session.email||'')} (${escapeHtml(roleLabel)})</div>`;
-  }
-}
-
-// Renders the "Managing department:" dropdown into the header's #deptBar,
-// visible only for a registrar. Calling this again (e.g. after boot) is
-// safe/idempotent. `onChange` is called (and may be async) after the
-// dropdown selection changes and session.manageDept has been updated.
-function renderDeptBar(onChange){
-  const bar = document.getElementById('deptBar');
-  if(!bar) return;
-  if(!session.isRegistrar){ bar.innerHTML = ''; return; }
-  bar.innerHTML = `
-    <div class="dept-bar">
-      <label class="muted" style="font-size:12px;">Managing department:</label>
-      <select id="deptSelect">
-        ${DEPARTMENTS.map(d=>`<option value="${d}" ${d===session.manageDept?'selected':''}>${d}</option>`).join("")}
-      </select>
-    </div>`;
-  document.getElementById('deptSelect').addEventListener('change', async function(e){
-    session.manageDept = e.target.value;
-    await onChange();
-  });
-}
-
-/* ============================================================
-   PAGE BOOT HELPERS
-   ============================================================ */
-
-// Call once at the top of every page script. Handles the Identity login
-// gate, resolves the signed-in user's role, and renders the shared chrome.
-// Returns false (and shows a blocking message) if the account isn't set up
-// with a valid role yet.
-export async function bootSession(activeKey){
-  const user = await requireLogin();
-  const role = resolveRole(user);
-  session.user = user;
-  session.email = user.email;
-  session.isRegistrar = role.isRegistrar;
-  session.department = role.department;
-  session.manageDept = role.isRegistrar ? DEPARTMENTS[0] : role.department;
-
-  if(!session.isRegistrar && !session.department){
-    // Note for whoever hits this: if a role was JUST added in Netlify
-    // Identity, an already-logged-in browser won't see it until it signs
-    // in again — the role list came from the session that was active at
-    // login time. The button below forces that by logging out; logging
-    // back in re-fetches the current roles from Netlify.
-    document.body.innerHTML = `<div class="empty-msg" style="margin:60px auto; max-width:560px; text-align:center;">
-      <p>Your account (${escapeHtml(user.email)}) isn't tagged with a department or the registrar role yet.
-      Ask the registrar to open Netlify Identity → Users → your account, and add a role of
-      <code>registrar</code> or <code>chair-BSIT</code> / <code>chair-BSBA-OM</code> / <code>chair-BEEd</code>.</p>
-      <p class="muted" style="font-size:13px;">Already had a role added just now? Your browser is still using the sign-in from before that — log out and back in to pick it up.</p>
-      <button class="btn" id="stuckLogoutBtn">Log Out &amp; Try Again</button>
-    </div>`;
-    document.getElementById('stuckLogoutBtn').addEventListener('click', async function(){
-      const ni = await waitForIdentityWidget();
-      if(ni){ try{ await ni.logout(); }catch(e){} }
-      location.reload();
-    });
-    return false;
-  }
-  renderChrome(activeKey);
-  lockDownWidgetFrames();
-  return true;
-}
-
-// For pages that only the registrar may use (Rooms / Assign / Schedule).
-// Shows a blocking message and returns false for a chair.
-export function requireRegistrar(){
-  if(session.isRegistrar) return true;
-  document.querySelectorAll('main').forEach(m=>{
-    m.innerHTML = `<div class="card"><div class="empty-msg">This page is managed by the registrar only.</div></div>`;
-  });
-  return false;
-}
-
-// Wires the department dropdown (registrar only) for a department-scoped
-// page (Faculty/Subjects/Sections), calling `reload` whenever it changes.
-export function wireDeptBar(reload){
-  renderDeptBar(reload);
-}
+          if(!room){
