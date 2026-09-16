@@ -1,5 +1,5 @@
 import {
-  state, uid, el, escapeHtml, byId, facultyName, subjectById, roomById, sectionById,
+  state, el, escapeHtml, byId, facultyName, subjectById, roomById, sectionById,
   assignKey, syncKey, YEAR_LABELS, DAYS, DAY_NAMES, DAY_START, DAY_END, TIME_STEP, spansLunch, hourLabel, timeRangeLabel,
   yearsInUse, downloadTextFile, toCsv, hasConflict, generateSchedule, expectedBlockIds, computeMissing,
   backupSchedule, revertSchedule, parseAdminUnits,
@@ -31,45 +31,6 @@ document.getElementById('yearPrefBody').addEventListener('change', function(e){
     state.yearPref[e.target.dataset.year] = e.target.value;
     persistSharedData();
   }
-});
-
-/* ---- Same-day subject groups (e.g. NSTP + PE) ---- */
-function renderSameDayGroupsPanel(){
-  const list = document.getElementById('sameDayGroupsList');
-  const select = document.getElementById('sameDayAddSelect');
-  const groups = state.sameDayGroups || [];
-  list.innerHTML = groups.length ? '' : "<div class='muted' style='font-size:13px;'>No groups yet — select 2 or more subjects below and click \"Group Selected Subjects.\"</div>";
-  groups.forEach(g=>{
-    const names = (g.subjectIds||[]).map(id=>{
-      const s = subjectById(id);
-      return s ? escapeHtml(s.code) : null;
-    }).filter(Boolean);
-    const row = el(`<div class="subj-chips" style="margin-bottom:8px;">
-      <span class="chip">${names.join(' + ') || '(subjects removed)'} <button class="rmSameDayGroupBtn" data-group="${g.id}">✕</button></span>
-    </div>`);
-    list.appendChild(row);
-  });
-  const sorted = state.subjects.slice().sort((a,b)=> a.year-b.year || a.code.localeCompare(b.code));
-  select.innerHTML = sorted.map(s=>
-    `<option value="${s.id}">${escapeHtml(s.code)} — ${escapeHtml(s.name)} (${YEAR_LABELS[s.year]||('Year '+s.year)}${s.department?', '+escapeHtml(s.department):''})</option>`
-  ).join("");
-}
-document.getElementById('sameDayGroupsList').addEventListener('click', function(e){
-  const btn = e.target.closest('.rmSameDayGroupBtn');
-  if(!btn) return;
-  state.sameDayGroups = (state.sameDayGroups||[]).filter(g=>g.id!==btn.dataset.group);
-  persistSharedData();
-  renderSameDayGroupsPanel();
-});
-document.getElementById('sameDayCreateGroupBtn').addEventListener('click', function(){
-  const select = document.getElementById('sameDayAddSelect');
-  const subjectIds = Array.from(select.selectedOptions).map(o=>o.value);
-  if(subjectIds.length < 2){ alert("Select at least 2 subjects to group (e.g. NSTP and PE)."); return; }
-  state.sameDayGroups = state.sameDayGroups || [];
-  state.sameDayGroups.push({ id: uid('sdg'), subjectIds });
-  persistSharedData();
-  Array.from(select.options).forEach(o=> o.selected = false);
-  renderSameDayGroupsPanel();
 });
 
 /* ---- Generate / Clear / Revert ---- */
@@ -421,6 +382,5 @@ function openEditModal(opts){
   if(!requireRegistrar()) return;
   await Promise.all([loadFacultyAll(), loadSubjectsAll(), loadSectionsAll(), loadSyncPrefAll(), loadSharedData()]);
   renderYearPrefPanel();
-  renderSameDayGroupsPanel();
   renderScheduleTab();
 })();
