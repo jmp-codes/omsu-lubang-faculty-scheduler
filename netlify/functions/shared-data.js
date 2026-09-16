@@ -12,7 +12,6 @@ const DEFAULT_SHARED = {
   rooms: [],
   assignments: {},
   yearPref: {},
-  sameDayGroups: [],
   schedule: [],
   manualRemoved: {},
   previousSchedule: [],
