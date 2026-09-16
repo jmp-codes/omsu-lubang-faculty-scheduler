@@ -87,6 +87,14 @@ function renderSectionsList(){
           </select>
           <button class="btn btn-sm btn-teal addSubjBtn" data-sec="${sec.id}">Add Subject</button>
         </div>
+        <div class="row" style="margin-top:6px;">
+          <select class="addAllSemSelect" data-sec="${sec.id}" style="width:160px;">
+            <option value="1st">1st Semester</option>
+            <option value="2nd">2nd Semester</option>
+            <option value="summer">Summer</option>
+          </select>
+          <button class="btn btn-sm addAllSemBtn" data-sec="${sec.id}" title="Adds every non-archived ${YEAR_LABELS[sec.year]} subject offered in the chosen semester (plus any marked 'Both Semesters') that isn't already on this section">Add All Subjects for Semester</button>
+        </div>
       </div>
     </details>`);
     wrap.appendChild(card);
@@ -97,6 +105,7 @@ document.getElementById('sectionsList').addEventListener('click', function(e){
   const delBtn = e.target.closest('.delSec');
   const dupBtn = e.target.closest('.dupSec');
   const addBtn = e.target.closest('.addSubjBtn');
+  const addAllBtn = e.target.closest('.addAllSemBtn');
   const rmBtn = e.target.closest('.rmSubjFromSec');
   if(dupBtn){
     e.preventDefault();
@@ -120,6 +129,26 @@ document.getElementById('sectionsList').addEventListener('click', function(e){
       sec.subjectIds.push(sel.value);
       persistSections(); renderSectionsList(); renderSyncPanel();
     }
+  }
+  if(addAllBtn){
+    const sec = sectionById(addAllBtn.dataset.sec);
+    const semSel = document.querySelector(`.addAllSemSelect[data-sec="${addAllBtn.dataset.sec}"]`);
+    const sem = semSel.value;
+    // Same-year, non-archived subjects offered that semester (or "both
+    // semesters") that aren't already on this section — lets a chair
+    // populate a whole semester's worth of subjects in one click instead
+    // of adding them one at a time.
+    const toAdd = state.subjects.filter(s=>
+      s.year === sec.year && !s.archived && !sec.subjectIds.includes(s.id) &&
+      (s.semester === sem || s.semester === 'both')
+    );
+    if(toAdd.length === 0){
+      alert("No matching subjects to add — they may already be on this section, or none exist for "+YEAR_LABELS[sec.year]+" in that semester.");
+      return;
+    }
+    toAdd.forEach(s=> sec.subjectIds.push(s.id));
+    persistSections(); renderSectionsList(); renderSyncPanel();
+    alert(toAdd.length + " subject" + (toAdd.length===1?"":"s") + " added to " + sec.name + ".");
   }
   if(rmBtn){
     const sec = sectionById(rmBtn.dataset.sec);
