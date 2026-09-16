@@ -78,6 +78,21 @@ function fixDuplicateWidgetFrame(){
   });
 }
 
+// Shown if the person closes the login/signup modal (the "X" button)
+// without actually signing in. Without this, there was no way to get the
+// modal back afterward short of reloading the whole page.
+function showSignInPrompt(ni){
+  document.body.innerHTML = `<div class="empty-msg" style="margin:60px auto; max-width:420px; text-align:center;">
+    <p>Please sign in to continue.</p>
+    <button class="btn" id="reopenLoginBtn">Log In / Sign Up</button>
+  </div>`;
+  document.getElementById('reopenLoginBtn').addEventListener('click', function(){
+    ni.open('login');
+    const iv = setInterval(fixDuplicateWidgetFrame, 150);
+    setTimeout(()=>clearInterval(iv), 8000);
+  });
+}
+
 async function requireLogin(){
   const ni = await waitForIdentityWidget();
   if(!ni){
@@ -87,6 +102,10 @@ async function requireLogin(){
   return new Promise((resolve)=>{
     ni.on('init', user=>{ if(user) resolve(user); else ni.open('login'); });
     ni.on('login', user=>{ ni.close(); resolve(user); });
+    // Fires whenever the modal closes for any reason — including our own
+    // ni.close() right after a successful login above, so only react to it
+    // when the person closed it (the "X") WITHOUT ever signing in.
+    ni.on('close', function(){ if(!ni.currentUser()) showSignInPrompt(ni); });
     ni.init();
     // Keep checking for the stray-iframe quirk for a few seconds after
     // init/open, since which iframe ends up empty vs. populated can settle
