@@ -53,26 +53,46 @@ function waitForIdentityWidget(){
 
 // Resolves once a user is signed in (opening the login widget if needed).
 //
-// IMPORTANT: the netlify-identity-widget script auto-initializes itself as
-// soon as it loads (it calls its own init() before this module ever runs).
-// Calling ni.init() again here — which earlier versions of this file did —
-// makes the widget build a SECOND internal modal/iframe on top of the one
-// it already created. The two end up stacked: an empty, invisible-but-
-// full-screen phantom iframe sits above the real login form, silently
-// eating every click and making the page look permanently blank/frozen
-// with no console errors. So we never call init() ourselves — we only use
-// the already-initialized widget's public API (currentUser/open/on).
+// netlify-identity-widget needs its own init() call to configure gotrue and
+// fetch /.netlify/identity/settings — without it, open('login') creates an
+// iframe shell that never finishes rendering an actual form. But this
+// widget version has a separate, known quirk: after init(), it can leave
+// TWO #netlify-identity-widget iframes in the DOM instead of one — an
+// empty, full-screen, invisible one sitting on top of the real login form,
+// silently swallowing every click on the page (with zero console errors,
+// so it looks like the page just froze). fixDuplicateWidgetFrame() below
+// cleans that up: whichever iframe actually has form content in it is the
+// real one — keep that one visible and remove any empty duplicates.
+function fixDuplicateWidgetFrame(){
+  const frames = Array.from(document.querySelectorAll('iframe#netlify-identity-widget'));
+  if(frames.length < 2) return;
+  let real = null;
+  frames.forEach(f=>{
+    let hasContent = false;
+    try{ hasContent = !!(f.contentDocument && f.contentDocument.querySelector('input,button')); }catch(e){}
+    if(hasContent) real = f;
+  });
+  frames.forEach(f=>{
+    if(real && f === real) f.style.setProperty('display','block','important');
+    else if(f !== real) f.remove();
+  });
+}
+
 async function requireLogin(){
   const ni = await waitForIdentityWidget();
   if(!ni){
     document.body.innerHTML = `<div class="empty-msg" style="margin:60px auto; max-width:520px;">Couldn't load the sign-in widget (Netlify Identity script). Check your internet connection and reload.</div>`;
     throw new Error("Identity widget unavailable");
   }
-  const already = ni.currentUser();
-  if(already) return already;
   return new Promise((resolve)=>{
+    ni.on('init', user=>{ if(user) resolve(user); else ni.open('login'); });
     ni.on('login', user=>{ ni.close(); resolve(user); });
-    ni.open('login');
+    ni.init();
+    // Keep checking for the stray-iframe quirk for a few seconds after
+    // init/open, since which iframe ends up empty vs. populated can settle
+    // a little after the fact.
+    const iv = setInterval(fixDuplicateWidgetFrame, 150);
+    setTimeout(()=>clearInterval(iv), 8000);
   });
 }
 
