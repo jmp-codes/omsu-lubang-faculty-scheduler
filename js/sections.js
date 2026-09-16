@@ -5,6 +5,15 @@ import {
   persistSections, persistSyncPref
 } from './shared.js';
 
+// Tracks section cards the user has manually collapsed. renderSectionsList()
+// rebuilds every card from scratch after almost every action (add/remove a
+// subject, edit year/count, etc.), so without this, a full re-render would
+// silently re-expand every card back open each time. A section id that
+// isn't in this set renders open — which is also what makes a brand-new
+// section (or a duplicate) always appear expanded, even if every other
+// card on the page is currently collapsed.
+const collapsedSectionIds = new Set();
+
 document.getElementById('secSaveBtn').addEventListener('click', function(){
   const name = document.getElementById('secName').value.trim();
   if(!name){ alert("Please enter a section name."); return; }
@@ -57,7 +66,8 @@ function renderSectionsList(){
     // nobody accidentally adds them to a new section, but one already on a
     // section keeps showing normally above via subjectById() regardless.
     const availableSubjects = state.subjects.filter(s=>!sec.subjectIds.includes(s.id) && !s.archived);
-    const card = el(`<details class="section-card" open>
+    const isOpen = !collapsedSectionIds.has(sec.id);
+    const card = el(`<details class="section-card"${isOpen?' open':''}>
       <summary>
         <div><span class="title">${escapeHtml(sec.name)}</span><span class="meta pill-year" style="margin-left:8px;">${YEAR_LABELS[sec.year]}</span><span class="meta">${sec.studentCount} students</span></div>
         <div class="row" style="flex:none;">
@@ -97,6 +107,12 @@ function renderSectionsList(){
         </div>
       </div>
     </details>`);
+    // Remembers this card's open/closed state across the next re-render
+    // (see collapsedSectionIds above) instead of always snapping back open.
+    card.addEventListener('toggle', function(){
+      if(card.open) collapsedSectionIds.delete(sec.id);
+      else collapsedSectionIds.add(sec.id);
+    });
     wrap.appendChild(card);
   });
 }
@@ -119,6 +135,7 @@ document.getElementById('sectionsList').addEventListener('click', function(e){
   if(delBtn){
     if(confirm("Delete this section?")){
       state.sections = state.sections.filter(s=>s.id!==delBtn.dataset.id);
+      collapsedSectionIds.delete(delBtn.dataset.id);
       persistSections(); renderSectionsList(); renderSyncPanel();
     }
   }
@@ -167,9 +184,10 @@ document.getElementById('sectionsList').addEventListener('change', function(e){
   }
 });
 
-function renderSyncPanel(){
-  const card = document.getElementById('syncPanelCard');
-  const body = document.getElementById('syncPanelBody');
+// Shared by renderSyncPanel() and the Sync All/Clear All buttons: every
+// year+subject combination that 2 or more sections currently have, i.e.
+// every row the panel can show a toggle for.
+function eligibleSyncGroups(){
   const groups = {};
   state.sections.forEach(sec=>{
     sec.subjectIds.forEach(subjId=>{
@@ -177,9 +195,17 @@ function renderSyncPanel(){
       (groups[key] = groups[key]||{year:sec.year, subjectId:subjId, sections:[]}).sections.push(sec);
     });
   });
-  const eligible = Object.values(groups).filter(g=>g.sections.length>=2);
+  return Object.values(groups).filter(g=>g.sections.length>=2);
+}
+
+function renderSyncPanel(){
+  const card = document.getElementById('syncPanelCard');
+  const body = document.getElementById('syncPanelBody');
+  const countEl = document.getElementById('syncPanelCount');
+  const eligible = eligibleSyncGroups();
   if(eligible.length===0){ card.style.display='none'; body.innerHTML=''; return; }
   card.style.display='';
+  countEl.textContent = eligible.length;
   body.innerHTML='';
   eligible.sort((a,b)=> a.year-b.year || (subjectById(a.subjectId)?.code||'').localeCompare(subjectById(b.subjectId)?.code||''));
   eligible.forEach(g=>{
@@ -202,6 +228,17 @@ document.getElementById('syncPanelBody').addEventListener('change', function(e){
     persistSyncPref();
   }
 });
+function setAllSyncPref(value){
+  eligibleSyncGroups().forEach(g=>{ state.syncPref[syncKey(g.year, g.subjectId)] = value; });
+  persistSyncPref();
+  renderSyncPanel();
+}
+document.getElementById('syncAllBtn').addEventListener('click', ()=> setAllSyncPref(true));
+document.getElementById('syncNoneBtn').addEventListener('click', ()=> setAllSyncPref(false));
+// Note: #syncPanelDetails itself is static markup (only its #syncPanelBody
+// child gets rebuilt on each render), so the browser keeps whatever
+// open/closed state the user leaves it in across re-renders automatically
+// — nothing extra to track here.
 
 async function reload(){
   await loadSubjects();
