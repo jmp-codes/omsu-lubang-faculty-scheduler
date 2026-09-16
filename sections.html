@@ -43,7 +43,16 @@
   <div class="card" id="syncPanelCard" style="display:none;">
     <h2>Same-Time Scheduling</h2>
     <div class="hint">When 2 or more sections of the same year take the same subject, choose whether the generator should try placing them at the same day/time (different rooms, possibly different instructors).</div>
-    <div id="syncPanelBody"></div>
+    <details class="group" id="syncPanelDetails" open>
+      <summary>Shared subjects <span class="count" id="syncPanelCount"></span></summary>
+      <div class="group-body">
+        <div class="row" style="margin-bottom:10px;">
+          <button class="btn btn-sm" id="syncAllBtn">Sync All</button>
+          <button class="btn btn-sm" id="syncNoneBtn">Clear All</button>
+        </div>
+        <div id="syncPanelBody"></div>
+      </div>
+    </details>
   </div>
 
   <div class="card">
