@@ -53,7 +53,10 @@ function renderSectionsList(){
   wrap.innerHTML = "";
   document.getElementById('sectionsEmpty').classList.toggle('hidden', state.sections.length>0);
   state.sections.forEach(sec=>{
-    const availableSubjects = state.subjects.filter(s=>!sec.subjectIds.includes(s.id));
+    // Archived subjects (retired curriculum) are hidden from this picker so
+    // nobody accidentally adds them to a new section, but one already on a
+    // section keeps showing normally above via subjectById() regardless.
+    const availableSubjects = state.subjects.filter(s=>!sec.subjectIds.includes(s.id) && !s.archived);
     const card = el(`<details class="section-card" open>
       <summary>
         <div><span class="title">${escapeHtml(sec.name)}</span><span class="meta pill-year" style="margin-left:8px;">${YEAR_LABELS[sec.year]}</span><span class="meta">${sec.studentCount} students</span></div>
@@ -74,12 +77,13 @@ function renderSectionsList(){
         <div class="subj-chips">${sec.subjectIds.map(sid=>{
           const s = subjectById(sid);
           if(!s) return "";
-          return `<span class="chip"><span class="badge ${s.type==='lab'?'badge-lab':'badge-lecture'}" style="margin-right:4px;">${s.type==='lab'?'Lab':'Lec'}</span>${escapeHtml(s.code)} — ${escapeHtml(s.name)} <button class="rmSubjFromSec" data-sec="${sec.id}" data-subj="${sid}">✕</button></span>`;
+          const curTag = s.curriculum ? ` <span class="muted" style="font-size:11px;">(${escapeHtml(s.curriculum)}${s.archived?', archived':''})</span>` : (s.archived ? ` <span class="muted" style="font-size:11px;">(archived)</span>` : '');
+          return `<span class="chip"><span class="badge ${s.type==='lab'?'badge-lab':'badge-lecture'}" style="margin-right:4px;">${s.type==='lab'?'Lab':'Lec'}</span>${escapeHtml(s.code)} — ${escapeHtml(s.name)}${curTag} <button class="rmSubjFromSec" data-sec="${sec.id}" data-subj="${sid}">✕</button></span>`;
         }).join("") || "<span class='muted'>No subjects added yet.</span>"}</div>
         <div class="row" style="margin-top:10px;">
           <select class="addSubjSelect" data-sec="${sec.id}" style="min-width:220px;">
             <option value="">— add a subject —</option>
-            ${availableSubjects.map(s=>`<option value="${s.id}">${escapeHtml(s.code)} — ${escapeHtml(s.name)} (${YEAR_LABELS[s.year]})</option>`).join("")}
+            ${availableSubjects.map(s=>`<option value="${s.id}">${escapeHtml(s.code)} — ${escapeHtml(s.name)} (${YEAR_LABELS[s.year]}${s.curriculum?', '+escapeHtml(s.curriculum):''})</option>`).join("")}
           </select>
           <button class="btn btn-sm btn-teal addSubjBtn" data-sec="${sec.id}">Add Subject</button>
         </div>

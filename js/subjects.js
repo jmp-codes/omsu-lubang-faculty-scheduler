@@ -18,23 +18,30 @@ function renderSubjectsGroups(){
   const wrap = document.getElementById('subjectsGroups');
   wrap.innerHTML = "";
   document.getElementById('subjectsEmpty').classList.toggle('hidden', state.subjects.length>0);
+  const showArchived = document.getElementById('subjShowArchived').checked;
+  const visible = state.subjects.filter(s=> showArchived || !s.archived);
   const byYear = {};
-  state.subjects.forEach(s=>{ (byYear[s.year] = byYear[s.year]||[]).push(s); });
+  visible.forEach(s=>{ (byYear[s.year] = byYear[s.year]||[]).push(s); });
   Object.keys(byYear).sort((a,b)=>a-b).forEach(year=>{
     const list = byYear[year].sort((a,b)=>a.code.localeCompare(b.code));
     const det = el(`<details class="group" open><summary>${YEAR_LABELS[year]||('Year '+year)} <span class="count">${list.length} subject${list.length===1?'':'s'}</span></summary><div class="group-body"></div></details>`);
     const body = det.querySelector('.group-body');
-    const table = el(`<table><thead><tr><th>Code</th><th>Name</th><th>Units</th><th>Type</th><th>Hours</th><th style="width:120px;">Actions</th></tr></thead><tbody></tbody></table>`);
+    const table = el(`<table><thead><tr><th>Code</th><th>Name</th><th>Curriculum</th><th>Units</th><th>Type</th><th>Hours</th><th style="width:160px;">Actions</th></tr></thead><tbody></tbody></table>`);
     const tbody = table.querySelector('tbody');
     list.forEach(s=>{
       const hoursTxt = s.type==='lab' ? `Lec ${s.lecHours}h + Lab ${s.labHours}h` : `${s.lecHours}h`;
-      const tr = el(`<tr>
+      const tr = el(`<tr${s.archived?' style="opacity:0.55;"':''}>
         <td><strong>${escapeHtml(s.code)}</strong></td>
         <td>${escapeHtml(s.name)}</td>
+        <td>${escapeHtml(s.curriculum||'')}${s.archived?' <span class="badge badge-muted" style="margin-left:4px;">Archived</span>':''}</td>
         <td>${s.units}</td>
         <td><span class="badge ${s.type==='lab'?'badge-lab':'badge-lecture'}">${s.type==='lab'?'Laboratory':'Lecture'}</span></td>
         <td>${hoursTxt}</td>
-        <td><button class="btn btn-sm editSubj" data-id="${s.id}">Edit</button> <button class="btn btn-sm btn-danger delSubj" data-id="${s.id}">Delete</button></td>
+        <td>
+          <button class="btn btn-sm editSubj" data-id="${s.id}">Edit</button>
+          <button class="btn btn-sm archiveSubj" data-id="${s.id}">${s.archived?'Unarchive':'Archive'}</button>
+          <button class="btn btn-sm btn-danger delSubj" data-id="${s.id}">Delete</button>
+        </td>
       </tr>`);
       tbody.appendChild(tr);
     });
@@ -42,11 +49,21 @@ function renderSubjectsGroups(){
     wrap.appendChild(det);
   });
 }
+document.getElementById('subjShowArchived').addEventListener('change', renderSubjectsGroups);
 
 document.getElementById('subjectsGroups').addEventListener('click', async function(e){
   const editBtn = e.target.closest('.editSubj');
   const delBtn = e.target.closest('.delSubj');
+  const archiveBtn = e.target.closest('.archiveSubj');
   if(editBtn) startEditSubject(editBtn.dataset.id);
+  if(archiveBtn){
+    const s = subjectById(archiveBtn.dataset.id);
+    if(s){
+      s.archived = !s.archived;
+      persistSubjects();
+      renderSubjectsGroups();
+    }
+  }
   if(delBtn){
     if(confirm("Delete this subject? It will be removed from any of this department's sections that reference it.")){
       const subjId = delBtn.dataset.id;
@@ -86,6 +103,7 @@ function startEditSubject(id){
   document.getElementById('subjLecHours').value = s.lecHours;
   document.getElementById('subjLabHours').value = s.labHours||3;
   document.getElementById('subjLabHoursField').style.display = s.type==='lab' ? '' : 'none';
+  document.getElementById('subjCurriculum').value = s.curriculum||'';
   document.getElementById('subjFormTitle').textContent = "Edit Subject";
   document.getElementById('subjSaveBtn').textContent = "Save Changes";
   document.getElementById('subjCancelBtn').style.display = '';
@@ -101,6 +119,7 @@ function resetSubjectForm(){
   document.getElementById('subjLecHours').value='3';
   document.getElementById('subjLabHours').value='3';
   document.getElementById('subjLabHoursField').style.display='none';
+  document.getElementById('subjCurriculum').value='';
   document.getElementById('subjFormTitle').textContent = "Add Subject";
   document.getElementById('subjSaveBtn').textContent = "Add Subject";
   document.getElementById('subjCancelBtn').style.display = 'none';
@@ -115,10 +134,11 @@ document.getElementById('subjSaveBtn').addEventListener('click', function(){
   const type = document.getElementById('subjType').value;
   const lecHours = parseFloat(document.getElementById('subjLecHours').value)||0;
   const labHours = type==='lab' ? (parseFloat(document.getElementById('subjLabHours').value)||0) : 0;
+  const curriculum = document.getElementById('subjCurriculum').value.trim();
   if(editingSubjectId){
-    Object.assign(subjectById(editingSubjectId), {code,name,year,units,type,lecHours,labHours});
+    Object.assign(subjectById(editingSubjectId), {code,name,year,units,type,lecHours,labHours,curriculum});
   } else {
-    state.subjects.push({id: uid('subj'), code, name, year, units, type, lecHours, labHours});
+    state.subjects.push({id: uid('subj'), code, name, year, units, type, lecHours, labHours, curriculum, archived:false});
   }
   persistSubjects();
   resetSubjectForm();
@@ -139,7 +159,8 @@ document.getElementById('subjBulkImportBtn').addEventListener('click', function(
     const type = (cols[4]||'').trim().toLowerCase() === 'lab' ? 'lab' : 'lecture';
     const lecHours = parseFloat(cols[5]) || 0;
     const labHours = type==='lab' ? (parseFloat(cols[6]) || 0) : 0;
-    state.subjects.push({id: uid('subj'), code, name, year, units, type, lecHours, labHours});
+    const curriculum = (cols[7]||'').trim();
+    state.subjects.push({id: uid('subj'), code, name, year, units, type, lecHours, labHours, curriculum, archived:false});
     count++;
   });
   persistSubjects();
