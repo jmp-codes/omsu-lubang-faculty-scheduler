@@ -455,10 +455,17 @@ export function findRoomFor(segType, sec, day, start, duration, excludeBlockId){
   return null;
 }
 
-export function tryPlaceSegment(sec, subj, facultyId, segType, hours, warnings){
-  const blockId = segmentBlockId(sec.id, subj.id, segType);
+// Finds a single free day/start/room for one contiguous block of `hours`
+// and, if found, pushes it onto state.schedule under `blockId`. `excludeDays`
+// (optional Set) removes specific days from consideration — used to force a
+// split lecture's second half onto a different day than its first half.
+// Returns true/false and never pushes a warning itself; callers decide
+// whether/how to report a final failure.
+function placeSegmentBlock(sec, subj, facultyId, segType, hours, blockId, excludeDays){
   const starts = candidateStartHours(segType, sec.year);
-  for(const day of daysByLoad(subj.preferSaturday ? 'Sat' : null)){
+  let days = daysByLoad(subj.preferSaturday ? 'Sat' : null);
+  if(excludeDays && excludeDays.size) days = days.filter(d=>!excludeDays.has(d));
+  for(const day of days){
     for(const start of starts){
       if(start+hours > DAY_END) continue;
       const test = {day, start, duration:hours, sectionId:sec.id, facultyId, roomId:null};
@@ -474,6 +481,35 @@ export function tryPlaceSegment(sec, subj, facultyId, segType, hours, warnings){
       });
       return true;
     }
+  }
+  return false;
+}
+
+export function tryPlaceSegment(sec, subj, facultyId, segType, hours, warnings){
+  const baseBlockId = segmentBlockId(sec.id, subj.id, segType);
+  // Lecture sessions are preferred split across two different days (e.g. a
+  // 2-hour lecture placed as Monday 1h + Wednesday 1h) rather than as one
+  // long block on a single day. This is tried FIRST; only when no valid
+  // two-day placement exists does it fall back to a single contiguous
+  // block covering the full duration (the previous behavior). Labs are
+  // never split — they still run as one continuous session.
+  if(segType === 'lecture' && hours >= 2){
+    const part1 = Math.ceil(hours/2), part2 = hours - part1;
+    if(part2 > 0){
+      const blockId1 = baseBlockId + '#1', blockId2 = baseBlockId + '#2';
+      if(placeSegmentBlock(sec, subj, facultyId, segType, part1, blockId1, null)){
+        const usedDay = state.schedule.find(b=>b.blockId===blockId1).day;
+        if(placeSegmentBlock(sec, subj, facultyId, segType, part2, blockId2, new Set([usedDay]))){
+          return true;
+        }
+        // Couldn't find a second day for the other half — undo the first
+        // half and fall back to a single monolithic block below.
+        state.schedule = state.schedule.filter(b=>b.blockId!==blockId1);
+      }
+    }
+  }
+  if(placeSegmentBlock(sec, subj, facultyId, segType, hours, baseBlockId, null)){
+    return true;
   }
   warnings.push(`Could not place ${segType} for ${subj.code} (${sec.name}) — no free faculty/room/day-time combination found.`);
   return false;
@@ -612,8 +648,16 @@ export function expectedBlockIds(){
 
 export function computeMissing(){
   const expected = expectedBlockIds();
-  const placedIds = new Set(state.schedule.map(b=>b.blockId));
-  return expected.filter(e=>!placedIds.has(e.blockId));
+  return expected.filter(e=>{
+    // A lecture requirement may be satisfied either as one whole block
+    // (blockId) or as two split halves (blockId#1 + blockId#2) — see
+    // tryPlaceSegment. Sum whichever of those actually landed in the
+    // schedule rather than checking for one exact blockId.
+    const placedHours = state.schedule
+      .filter(b=> b.blockId===e.blockId || b.blockId===e.blockId+'#1' || b.blockId===e.blockId+'#2')
+      .reduce((sum,b)=>sum+b.duration, 0);
+    return placedHours < e.hours;
+  });
 }
 
 export function parseAdminUnits(designations){
