@@ -4,6 +4,17 @@ import {
 } from './shared.js';
 
 let editingSubjectId = null;
+const SEMESTER_LABELS = {'1st':'1st Sem', '2nd':'2nd Sem', 'summer':'Summer', 'both':'Both Sems'};
+
+// Keeps the Curriculum field's suggestion list in sync with whatever
+// curriculum names are already in use, so the registrar/chair can reuse an
+// existing one (e.g. "2024 Curriculum") by picking it instead of retyping
+// it — while still being free text, so a brand-new curriculum name works too.
+function refreshCurriculumOptions(){
+  const list = document.getElementById('subjCurriculumList');
+  const names = Array.from(new Set(state.subjects.map(s=>s.curriculum).filter(Boolean))).sort();
+  list.innerHTML = names.map(n=>`<option value="${escapeHtml(n)}"></option>`).join("");
+}
 
 document.getElementById('subjType').addEventListener('change', function(){
   const isLab = this.value === 'lab';
@@ -20,13 +31,14 @@ function renderSubjectsGroups(){
   document.getElementById('subjectsEmpty').classList.toggle('hidden', state.subjects.length>0);
   const showArchived = document.getElementById('subjShowArchived').checked;
   const visible = state.subjects.filter(s=> showArchived || !s.archived);
+  refreshCurriculumOptions();
   const byYear = {};
   visible.forEach(s=>{ (byYear[s.year] = byYear[s.year]||[]).push(s); });
   Object.keys(byYear).sort((a,b)=>a-b).forEach(year=>{
     const list = byYear[year].sort((a,b)=>a.code.localeCompare(b.code));
     const det = el(`<details class="group" open><summary>${YEAR_LABELS[year]||('Year '+year)} <span class="count">${list.length} subject${list.length===1?'':'s'}</span></summary><div class="group-body"></div></details>`);
     const body = det.querySelector('.group-body');
-    const table = el(`<table><thead><tr><th>Code</th><th>Name</th><th>Curriculum</th><th>Units</th><th>Type</th><th>Hours</th><th style="width:160px;">Actions</th></tr></thead><tbody></tbody></table>`);
+    const table = el(`<table><thead><tr><th>Code</th><th>Name</th><th>Curriculum</th><th>Semester</th><th>Units</th><th>Type</th><th>Hours</th><th style="width:160px;">Actions</th></tr></thead><tbody></tbody></table>`);
     const tbody = table.querySelector('tbody');
     list.forEach(s=>{
       const hoursTxt = s.type==='lab' ? `Lec ${s.lecHours}h + Lab ${s.labHours}h` : `${s.lecHours}h`;
@@ -34,6 +46,7 @@ function renderSubjectsGroups(){
         <td><strong>${escapeHtml(s.code)}</strong></td>
         <td>${escapeHtml(s.name)}</td>
         <td>${escapeHtml(s.curriculum||'')}${s.archived?' <span class="badge badge-muted" style="margin-left:4px;">Archived</span>':''}</td>
+        <td>${SEMESTER_LABELS[s.semester]||'—'}</td>
         <td>${s.units}</td>
         <td><span class="badge ${s.type==='lab'?'badge-lab':'badge-lecture'}">${s.type==='lab'?'Laboratory':'Lecture'}</span></td>
         <td>${hoursTxt}</td>
@@ -103,6 +116,7 @@ function startEditSubject(id){
   document.getElementById('subjLecHours').value = s.lecHours;
   document.getElementById('subjLabHours').value = s.labHours||3;
   document.getElementById('subjLabHoursField').style.display = s.type==='lab' ? '' : 'none';
+  document.getElementById('subjSemester').value = s.semester||'1st';
   document.getElementById('subjCurriculum').value = s.curriculum||'';
   document.getElementById('subjFormTitle').textContent = "Edit Subject";
   document.getElementById('subjSaveBtn').textContent = "Save Changes";
@@ -119,6 +133,7 @@ function resetSubjectForm(){
   document.getElementById('subjLecHours').value='3';
   document.getElementById('subjLabHours').value='3';
   document.getElementById('subjLabHoursField').style.display='none';
+  document.getElementById('subjSemester').value='1st';
   document.getElementById('subjCurriculum').value='';
   document.getElementById('subjFormTitle').textContent = "Add Subject";
   document.getElementById('subjSaveBtn').textContent = "Add Subject";
@@ -134,11 +149,12 @@ document.getElementById('subjSaveBtn').addEventListener('click', function(){
   const type = document.getElementById('subjType').value;
   const lecHours = parseFloat(document.getElementById('subjLecHours').value)||0;
   const labHours = type==='lab' ? (parseFloat(document.getElementById('subjLabHours').value)||0) : 0;
+  const semester = document.getElementById('subjSemester').value;
   const curriculum = document.getElementById('subjCurriculum').value.trim();
   if(editingSubjectId){
-    Object.assign(subjectById(editingSubjectId), {code,name,year,units,type,lecHours,labHours,curriculum});
+    Object.assign(subjectById(editingSubjectId), {code,name,year,units,type,lecHours,labHours,semester,curriculum});
   } else {
-    state.subjects.push({id: uid('subj'), code, name, year, units, type, lecHours, labHours, curriculum, archived:false});
+    state.subjects.push({id: uid('subj'), code, name, year, units, type, lecHours, labHours, semester, curriculum, archived:false});
   }
   persistSubjects();
   resetSubjectForm();
@@ -159,8 +175,10 @@ document.getElementById('subjBulkImportBtn').addEventListener('click', function(
     const type = (cols[4]||'').trim().toLowerCase() === 'lab' ? 'lab' : 'lecture';
     const lecHours = parseFloat(cols[5]) || 0;
     const labHours = type==='lab' ? (parseFloat(cols[6]) || 0) : 0;
-    const curriculum = (cols[7]||'').trim();
-    state.subjects.push({id: uid('subj'), code, name, year, units, type, lecHours, labHours, curriculum, archived:false});
+    const semRaw = (cols[7]||'').trim().toLowerCase();
+    const semester = SEMESTER_LABELS[semRaw] ? semRaw : '1st';
+    const curriculum = (cols[8]||'').trim();
+    state.subjects.push({id: uid('subj'), code, name, year, units, type, lecHours, labHours, semester, curriculum, archived:false});
     count++;
   });
   persistSubjects();
