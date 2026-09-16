@@ -20,6 +20,18 @@ const DEFAULT_SHARED = {
 };
 
 exports.handler = async function handler(event, context) {
+  // See dept-resource.js for why this wrapper exists: without it, any
+  // unexpected error crashes the function and the client just sees a bare
+  // 502 with no useful information.
+  try {
+    return await run(event, context);
+  } catch (err) {
+    console.error("[shared-data] handler crashed:", err);
+    return json(500, { error: "Server error: " + (err && err.message ? err.message : String(err)) });
+  }
+};
+
+async function run(event, context) {
   const requester = getRequester(context);
   if (!requester) return unauthorized();
   if (!requester.isRegistrar) return forbidden("Only the registrar account can view or change Rooms, Assign Instructors, or the generated Schedule.");

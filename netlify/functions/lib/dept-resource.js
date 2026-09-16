@@ -16,6 +16,21 @@ function makeHandler(resource, { shape = "array" } = {}) {
   const empty = shape === "array" ? [] : {};
 
   return async function handler(event, context) {
+    // Without this, any unexpected error (a Blobs API hiccup, a bad
+    // assumption about the request shape, etc.) crashes the function
+    // outright and Netlify's platform returns a bare 502 with no body —
+    // which is exactly what was happening, and made it impossible to tell
+    // what actually broke. Catching it here means the client always gets
+    // back real JSON with the actual error message instead.
+    try {
+      return await run(event, context);
+    } catch (err) {
+      console.error(`[${resource}] handler crashed:`, err);
+      return json(500, { error: "Server error: " + (err && err.message ? err.message : String(err)) });
+    }
+  };
+
+  async function run(event, context) {
     const requester = getRequester(context);
     if (!requester) return unauthorized();
     if (!requester.authorized) return forbidden("Your account isn't tagged with a department or the registrar role yet. Ask the registrar to fix your account's role in Netlify Identity.");
