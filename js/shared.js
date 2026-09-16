@@ -384,6 +384,22 @@ export function candidateStartHours(segType, year){
   return all;
 }
 
+// Orders the week by how many hours are already scheduled on each day
+// (least busy first), instead of the fixed Mon->Sat order. Without this,
+// tryPlaceSegment/trySyncGroup always try Monday first for every single
+// class, so the week fills up strictly left-to-right and later days
+// (Thu-Sat) only ever get used once the earlier ones are completely full
+// — for a typical course load that never happens, so the schedule ends up
+// looking like it "stops" partway through the week even though nothing
+// requires that. Recomputed fresh from state.schedule each call so it
+// always reflects what's been placed so far in this generation pass.
+function daysByLoad(){
+  const load = {};
+  DAYS.forEach(d=>{ load[d] = 0; });
+  state.schedule.forEach(b=>{ load[b.day] = (load[b.day]||0) + b.duration; });
+  return DAYS.slice().sort((a,b)=> load[a]-load[b] || DAYS.indexOf(a)-DAYS.indexOf(b));
+}
+
 export function findRoomFor(subjType, studentCount, day, start, duration, excludeBlockId){
   const roomType = subjType;
   const candidates = state.rooms.filter(r=>r.type===roomType && (!r.capacity || r.capacity>=studentCount))
@@ -398,7 +414,7 @@ export function findRoomFor(subjType, studentCount, day, start, duration, exclud
 export function tryPlaceSegment(sec, subj, facultyId, segType, hours, warnings){
   const blockId = segmentBlockId(sec.id, subj.id, segType);
   const starts = candidateStartHours(segType, sec.year);
-  for(const day of DAYS){
+  for(const day of daysByLoad()){
     for(const start of starts){
       if(start+hours > DAY_END) continue;
       const test = {day, start, duration:hours, sectionId:sec.id, facultyId, roomId:null};
@@ -440,7 +456,7 @@ export function trySyncGroup(year, subjectId, sections, warnings){
     const starts = candidateStartHours(segType, year);
     let placed = false;
     outer:
-    for(const day of DAYS){
+    for(const day of daysByLoad()){
       for(const start of starts){
         if(start+hours > DAY_END) continue;
         const usedRooms = new Set();
