@@ -18,7 +18,7 @@ export function defaultState(){
   return {
     faculty: [],     // {id,name,rank,qualifications:[],designations:[],externalBusy:[{id,day,start,duration,label}],department}
     subjects: [],    // {id,code,name,year,units,type,lecHours,labHours,department,semester,curriculum,archived,preferSaturday}
-    rooms: [],       // {id,name,type,capacity} — shared/registrar-owned
+    rooms: [],       // {id,name,type,capacity,homeSectionIds:[]} — shared/registrar-owned; homeSectionIds only meaningful for type==='lecture'
     sections: [],    // {id,name,year,studentCount,subjectIds:[],department}
     assignments: {}, // `${sectionId}::${subjectId}` -> facultyId — shared/registrar-owned
     syncPref: {},    // `${year}::${subjectId}` -> true/false — department-owned
@@ -420,11 +420,35 @@ function daysByLoad(preferDay){
   return ordered;
 }
 
-export function findRoomFor(subjType, studentCount, day, start, duration, excludeBlockId){
-  const roomType = subjType;
-  const candidates = state.rooms.filter(r=>r.type===roomType && (!r.capacity || r.capacity>=studentCount))
-    .sort((a,b)=> (a.capacity||9999) - (b.capacity||9999));
-  for(const room of candidates){
+// Lecture rooms a section is "assigned home" to (set on the Rooms page,
+// room.homeSectionIds) — labs are never home-assigned, since sections move
+// between whichever lab room fits the subject.
+function homeRoomIdsFor(sec){
+  return state.rooms.filter(r=>r.type==='lecture' && (r.homeSectionIds||[]).includes(sec.id)).map(r=>r.id);
+}
+
+// Candidate rooms for a segment, in the order they should be tried. For a
+// lecture segment on a section with a home room set, that home room (or
+// rooms, if more than one was assigned) is tried first — but this is only
+// an ordering, not a hard restriction: if the home room isn't free at the
+// particular day/time being attempted, the caller still falls through to
+// the next candidate here, so the class still gets scheduled rather than
+// being stuck waiting on one specific room.
+function roomCandidatesFor(segType, sec){
+  const candidates = state.rooms.filter(r=>r.type===segType && (!r.capacity || r.capacity>=sec.studentCount));
+  if(segType === 'lecture'){
+    const homeIds = new Set(homeRoomIdsFor(sec));
+    if(homeIds.size){
+      return candidates.slice().sort((a,b)=>
+        (homeIds.has(a.id)?0:1) - (homeIds.has(b.id)?0:1) || (a.capacity||9999) - (b.capacity||9999)
+      );
+    }
+  }
+  return candidates.slice().sort((a,b)=> (a.capacity||9999) - (b.capacity||9999));
+}
+
+export function findRoomFor(segType, sec, day, start, duration, excludeBlockId){
+  for(const room of roomCandidatesFor(segType, sec)){
     const conflict = state.schedule.some(b=> b.blockId!==excludeBlockId && b.roomId===room.id && b.day===day && overlaps(b.start,b.duration,start,duration));
     if(!conflict) return room;
   }
@@ -439,7 +463,7 @@ export function tryPlaceSegment(sec, subj, facultyId, segType, hours, warnings){
       if(start+hours > DAY_END) continue;
       const test = {day, start, duration:hours, sectionId:sec.id, facultyId, roomId:null};
       if(hasConflict(test, blockId)) continue;
-      const room = findRoomFor(segType, sec.studentCount, day, start, hours, blockId);
+      const room = findRoomFor(segType, sec, day, start, hours, blockId);
       if(!room) continue;
       state.schedule.push({
         blockId, day, start, duration:hours, type:segType,
@@ -486,8 +510,7 @@ export function trySyncGroup(year, subjectId, sections, warnings){
           const blockId = segmentBlockId(p.sec.id, subj.id, segType);
           const test = {day, start, duration:hours, sectionId:p.sec.id, facultyId:p.facultyId, roomId:null};
           if(hasConflict(test, blockId)){ ok=false; break; }
-          const roomType = segType;
-          const room = state.rooms.find(r=> r.type===roomType && (!r.capacity || r.capacity>=p.sec.studentCount) && !usedRooms.has(r.id)
+          const room = roomCandidatesFor(segType, p.sec).find(r=> !usedRooms.has(r.id)
             && !state.schedule.some(b=>b.blockId!==blockId && b.roomId===r.id && b.day===day && overlaps(b.start,b.duration,start,hours)));
           if(!room){ ok=false; break; }
           usedRooms.add(room.id);
