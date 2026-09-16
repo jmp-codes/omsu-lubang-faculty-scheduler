@@ -101,9 +101,27 @@ function showSignInPrompt(ni){
   document.getElementById('reopenLoginBtn').addEventListener('click', function(){
     overlay.remove();
     ni.open('login');
-    const iv = setInterval(fixDuplicateWidgetFrame, 150);
-    setTimeout(()=>clearInterval(iv), 8000);
+    startWidgetFixPolling();
   });
+}
+
+// The stray-iframe fix (fixDuplicateWidgetFrame) has to poll for a few
+// seconds after each open(), since which iframe ends up empty vs.
+// populated can settle a little after the fact. But if that polling is
+// still running at the moment a real login succeeds and the modal closes,
+// it can grab the (still momentarily content-having) login iframe and
+// force it back to display:block — leaving an invisible, full-screen,
+// click-eating iframe sitting over the whole app even though you're
+// signed in and the modal looks closed. So every place that starts this
+// polling must go through here, and login/close must stop it immediately.
+let widgetFixIntervalId = null;
+function startWidgetFixPolling(){
+  stopWidgetFixPolling();
+  widgetFixIntervalId = setInterval(fixDuplicateWidgetFrame, 150);
+  setTimeout(stopWidgetFixPolling, 8000);
+}
+function stopWidgetFixPolling(){
+  if(widgetFixIntervalId){ clearInterval(widgetFixIntervalId); widgetFixIntervalId = null; }
 }
 
 async function requireLogin(){
@@ -114,17 +132,13 @@ async function requireLogin(){
   }
   return new Promise((resolve)=>{
     ni.on('init', user=>{ if(user) resolve(user); else ni.open('login'); });
-    ni.on('login', user=>{ ni.close(); resolve(user); });
+    ni.on('login', user=>{ stopWidgetFixPolling(); ni.close(); resolve(user); });
     // Fires whenever the modal closes for any reason — including our own
     // ni.close() right after a successful login above, so only react to it
     // when the person closed it (the "X") WITHOUT ever signing in.
-    ni.on('close', function(){ if(!ni.currentUser()) showSignInPrompt(ni); });
+    ni.on('close', function(){ stopWidgetFixPolling(); if(!ni.currentUser()) showSignInPrompt(ni); });
     ni.init();
-    // Keep checking for the stray-iframe quirk for a few seconds after
-    // init/open, since which iframe ends up empty vs. populated can settle
-    // a little after the fact.
-    const iv = setInterval(fixDuplicateWidgetFrame, 150);
-    setTimeout(()=>clearInterval(iv), 8000);
+    startWidgetFixPolling();
   });
 }
 
@@ -629,11 +643,23 @@ export async function bootSession(activeKey){
   session.manageDept = role.isRegistrar ? DEPARTMENTS[0] : role.department;
 
   if(!session.isRegistrar && !session.department){
-    document.body.innerHTML = `<div class="empty-msg" style="margin:60px auto; max-width:560px;">
-      Your account (${escapeHtml(user.email)}) isn't tagged with a department or the registrar role yet.
+    // Note for whoever hits this: if a role was JUST added in Netlify
+    // Identity, an already-logged-in browser won't see it until it signs
+    // in again — the role list came from the session that was active at
+    // login time. The button below forces that by logging out; logging
+    // back in re-fetches the current roles from Netlify.
+    document.body.innerHTML = `<div class="empty-msg" style="margin:60px auto; max-width:560px; text-align:center;">
+      <p>Your account (${escapeHtml(user.email)}) isn't tagged with a department or the registrar role yet.
       Ask the registrar to open Netlify Identity → Users → your account, and add a role of
-      <code>registrar</code> or <code>chair-BSIT</code> / <code>chair-BSBA-OM</code> / <code>chair-BEEd</code>.
+      <code>registrar</code> or <code>chair-BSIT</code> / <code>chair-BSBA-OM</code> / <code>chair-BEEd</code>.</p>
+      <p class="muted" style="font-size:13px;">Already had a role added just now? Your browser is still using the sign-in from before that — log out and back in to pick it up.</p>
+      <button class="btn" id="stuckLogoutBtn">Log Out &amp; Try Again</button>
     </div>`;
+    document.getElementById('stuckLogoutBtn').addEventListener('click', async function(){
+      const ni = await waitForIdentityWidget();
+      if(ni) ni.logout();
+      location.reload();
+    });
     return false;
   }
   renderChrome(activeKey);
