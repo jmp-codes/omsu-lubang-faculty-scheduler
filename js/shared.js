@@ -52,16 +52,27 @@ function waitForIdentityWidget(){
 }
 
 // Resolves once a user is signed in (opening the login widget if needed).
+//
+// IMPORTANT: the netlify-identity-widget script auto-initializes itself as
+// soon as it loads (it calls its own init() before this module ever runs).
+// Calling ni.init() again here — which earlier versions of this file did —
+// makes the widget build a SECOND internal modal/iframe on top of the one
+// it already created. The two end up stacked: an empty, invisible-but-
+// full-screen phantom iframe sits above the real login form, silently
+// eating every click and making the page look permanently blank/frozen
+// with no console errors. So we never call init() ourselves — we only use
+// the already-initialized widget's public API (currentUser/open/on).
 async function requireLogin(){
   const ni = await waitForIdentityWidget();
   if(!ni){
     document.body.innerHTML = `<div class="empty-msg" style="margin:60px auto; max-width:520px;">Couldn't load the sign-in widget (Netlify Identity script). Check your internet connection and reload.</div>`;
     throw new Error("Identity widget unavailable");
   }
+  const already = ni.currentUser();
+  if(already) return already;
   return new Promise((resolve)=>{
-    ni.on('init', user=>{ if(user) resolve(user); else ni.open('login'); });
     ni.on('login', user=>{ ni.close(); resolve(user); });
-    ni.init();
+    ni.open('login');
   });
 }
 
