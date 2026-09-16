@@ -1,6 +1,6 @@
 import {
   state, el, escapeHtml, byId, facultyName, subjectById, roomById, sectionById,
-  assignKey, syncKey, YEAR_LABELS, DAYS, DAY_NAMES, DAY_START, DAY_END, hourLabel, timeRangeLabel,
+  assignKey, syncKey, YEAR_LABELS, DAYS, DAY_NAMES, DAY_START, DAY_END, TIME_STEP, hourLabel, timeRangeLabel,
   yearsInUse, downloadTextFile, toCsv, hasConflict, generateSchedule, expectedBlockIds, computeMissing,
   backupSchedule, revertSchedule, parseAdminUnits,
   bootSession, requireRegistrar, loadFacultyAll, loadSubjectsAll, loadSectionsAll, loadSyncPrefAll,
@@ -214,7 +214,7 @@ function renderScheduleGrid(){
   let thead = '<thead><tr><th>Time</th>' + DAYS.map(d=>`<th>${DAY_NAMES[d]}</th>`).join("") + '</tr></thead>';
   let rows = '';
   const skip = {};
-  for(let h=DAY_START; h<DAY_END; h++){
+  for(let h=DAY_START; h<DAY_END; h+=TIME_STEP){
     rows += `<tr><td class="time-col">${hourLabel(h)}</td>`;
     DAYS.forEach(day=>{
       const key = day+"_"+h;
@@ -222,16 +222,16 @@ function renderScheduleGrid(){
       const block = blocks.find(b=>b.day===day && b.start===h);
       const ext = externalBlocks.find(b=>b.day===day && b.start===h);
       if(block){
-        const span = Math.max(1, Math.round(block.duration));
-        for(let k=1;k<span;k++) skip[day+"_"+(h+k)] = true;
+        const span = Math.max(1, Math.round(block.duration / TIME_STEP));
+        for(let k=1;k<span;k++) skip[day+"_"+(h+k*TIME_STEP)] = true;
         rows += `<td rowspan="${span}"><div class="block ${block.type} ${block.manual?'manual':''}" data-block="${block.blockId}">
           <div class="b-title">${escapeHtml(block.subject)}</div>
           <div class="b-sub">${currentView!=='section'?escapeHtml(block.sectionName)+' · ':''}${currentView!=='faculty'?escapeHtml(facultyName(block.facultyId))+' · ':''}${currentView!=='room'?escapeHtml(block.roomName):''}</div>
           <div class="b-sub">${timeRangeLabel(block.start,block.duration)}</div>
         </div></td>`;
       } else if(ext){
-        const span = Math.max(1, Math.round(ext.duration));
-        for(let k=1;k<span;k++) skip[day+"_"+(h+k)] = true;
+        const span = Math.max(1, Math.round(ext.duration / TIME_STEP));
+        for(let k=1;k<span;k++) skip[day+"_"+(h+k*TIME_STEP)] = true;
         rows += `<td rowspan="${span}"><div class="ext-block">${escapeHtml(ext.label)} (${timeRangeLabel(ext.start,ext.duration)})</div></td>`;
       } else {
         rows += `<td></td>`;
@@ -306,7 +306,7 @@ function openEditModal(opts){
           <select id="editDay">${DAYS.map(d=>`<option value="${d}" ${d===day?'selected':''}>${DAY_NAMES[d]}</option>`).join("")}</select>
         </div>
         <div class="field"><label>Start Time</label>
-          <select id="editStart">${(function(){let o='';for(let h=DAY_START; h<=DAY_END-duration; h++){o+=`<option value="${h}" ${h===start?'selected':''}>${hourLabel(h)}</option>`;} return o;})()}</select>
+          <select id="editStart">${(function(){let o='';for(let h=DAY_START; h<=DAY_END-duration; h+=TIME_STEP){o+=`<option value="${h}" ${h===start?'selected':''}>${hourLabel(h)}</option>`;} return o;})()}</select>
         </div>
         <div class="field wide"><label>Room</label>
           <select id="editRoom">
