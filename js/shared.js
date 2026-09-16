@@ -10,6 +10,15 @@ export const DAY_NAMES = {Mon:"Monday",Tue:"Tuesday",Wed:"Wednesday",Thu:"Thursd
 export const DAY_START = 7.5;  // 7:30 AM — the earliest any class may ever start
 export const DAY_END   = 20.5; // 8:30 PM — no class may run past this
 export const TIME_STEP = 0.5;  // granularity of schedulable start times (30 min)
+export const LUNCH_START = 12;   // 12:00 NN
+export const LUNCH_END   = 13;   // 1:00 PM — no class may occupy any part of this window
+
+// True if a block running [start, start+duration) would occupy any part of
+// the lunch break — used as a hard rule (unlike the other scheduling
+// preferences in this file, there's no fallback that ignores this one).
+export function spansLunch(start, duration){
+  return start < LUNCH_END && start+duration > LUNCH_START;
+}
 export const YEAR_LABELS = {1:"1st Year",2:"2nd Year",3:"3rd Year",4:"4th Year",5:"5th Year"};
 export const DEPARTMENTS = ["BSIT","BSBA-OM","BEEd"];
 
@@ -395,7 +404,15 @@ export function candidateStartHours(segType, year){
     : yearPref==='afternoon' ? 'morning'
     : 'none';
   const all = [];
-  for(let h=DAY_START; h<DAY_END; h+=TIME_STEP) all.push(h);
+  // A start time that falls IN the lunch window is always invalid, no
+  // matter the segment's duration — skip those here. A start time that
+  // begins before lunch but would run INTO it depends on that segment's
+  // duration, which this function doesn't know, so that case is caught
+  // separately by spansLunch() wherever a block actually gets placed.
+  for(let h=DAY_START; h<DAY_END; h+=TIME_STEP){
+    if(h >= LUNCH_START && h < LUNCH_END) continue;
+    all.push(h);
+  }
   let ordered;
   if(pref==='afternoon'){
     ordered = all.slice().sort((a,b)=>{
@@ -546,6 +563,7 @@ function placeSegmentBlock(sec, subj, facultyId, segType, hours, blockId, exclud
     for(const day of days){
       for(const start of starts){
         if(start+hours > DAY_END) continue;
+        if(spansLunch(start, hours)) continue;
         const test = {day, start, duration:hours, sectionId:sec.id, facultyId, roomId:null};
         if(hasConflict(test, blockId)) continue;
         if(avoidLongRuns && wouldExceedBreakLimit(sec.id, facultyId, day, start, hours, blockId)) continue;
@@ -623,10 +641,11 @@ export function trySyncGroup(year, subjectId, sections, warnings){
     // being scheduled together.
     const findSlot = (avoidLongRuns)=>{
       for(const day of daysByLoad(subj.preferSaturday ? 'Sat' : null)){
-        for(const start of starts){
-          if(start+hours > DAY_END) continue;
-          const usedRooms = new Set();
-          const plan = [];
+         for(const start of starts){
+             if(start+hours > DAY_END) continue;
+             if(spansLunch(start, hours)) continue;
+             const usedRooms = new Set();
+             const plan = [];
           let ok = true;
           for(const p of readyParts){
             const blockId = segmentBlockId(p.sec.id, subj.id, segType);
