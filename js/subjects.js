@@ -63,7 +63,7 @@ function renderSubjectsGroups(){
         <td><strong>${escapeHtml(s.code)}</strong></td>
         <td>${escapeHtml(s.name)}</td>
         <td>${escapeHtml(s.curriculum||'')}${s.archived?' <span class="badge badge-muted" style="margin-left:4px;">Archived</span>':''}</td>
-        <td>${SEMESTER_LABELS[s.semester]||'—'}</td>
+        <td>${SEMESTER_LABELS[s.semester]||'—'}${s.preferSaturday?' <span class="badge badge-muted" title="Generator tries Saturday first for this subject">Sat</span>':''}</td>
         <td>${s.units}</td>
         <td><span class="badge ${s.type==='lab'?'badge-lab':'badge-lecture'}">${s.type==='lab'?'Laboratory':'Lecture'}</span></td>
         <td>${hoursTxt}</td>
@@ -135,6 +135,7 @@ function startEditSubject(id){
   document.getElementById('subjLabHoursField').style.display = s.type==='lab' ? '' : 'none';
   document.getElementById('subjSemester').value = s.semester||'1st';
   document.getElementById('subjCurriculum').value = s.curriculum||'';
+  document.getElementById('subjPreferSaturday').checked = !!s.preferSaturday;
   document.getElementById('subjFormTitle').textContent = "Edit Subject";
   document.getElementById('subjSaveBtn').textContent = "Save Changes";
   document.getElementById('subjCancelBtn').style.display = '';
@@ -152,6 +153,7 @@ function resetSubjectForm(){
   document.getElementById('subjLabHoursField').style.display='none';
   document.getElementById('subjSemester').value='1st';
   document.getElementById('subjCurriculum').value='';
+  document.getElementById('subjPreferSaturday').checked = false;
   document.getElementById('subjFormTitle').textContent = "Add Subject";
   document.getElementById('subjSaveBtn').textContent = "Add Subject";
   document.getElementById('subjCancelBtn').style.display = 'none';
@@ -168,10 +170,11 @@ document.getElementById('subjSaveBtn').addEventListener('click', function(){
   const labHours = type==='lab' ? (parseFloat(document.getElementById('subjLabHours').value)||0) : 0;
   const semester = document.getElementById('subjSemester').value;
   const curriculum = document.getElementById('subjCurriculum').value.trim();
+  const preferSaturday = document.getElementById('subjPreferSaturday').checked;
   if(editingSubjectId){
-    Object.assign(subjectById(editingSubjectId), {code,name,year,units,type,lecHours,labHours,semester,curriculum});
+    Object.assign(subjectById(editingSubjectId), {code,name,year,units,type,lecHours,labHours,semester,curriculum,preferSaturday});
   } else {
-    state.subjects.push({id: uid('subj'), code, name, year, units, type, lecHours, labHours, semester, curriculum, archived:false});
+    state.subjects.push({id: uid('subj'), code, name, year, units, type, lecHours, labHours, semester, curriculum, preferSaturday, archived:false});
   }
   // Make sure the year this subject now belongs to is expanded, even if
   // that group was previously collapsed — otherwise the add/edit you just
@@ -199,7 +202,8 @@ document.getElementById('subjBulkImportBtn').addEventListener('click', function(
     const semRaw = (cols[7]||'').trim().toLowerCase();
     const semester = SEMESTER_LABELS[semRaw] ? semRaw : '1st';
     const curriculum = (cols[8]||'').trim();
-    state.subjects.push({id: uid('subj'), code, name, year, units, type, lecHours, labHours, semester, curriculum, archived:false});
+    const preferSaturday = (cols[9]||'').trim().toLowerCase() === 'yes';
+    state.subjects.push({id: uid('subj'), code, name, year, units, type, lecHours, labHours, semester, curriculum, preferSaturday, archived:false});
     collapsedYears.delete(String(year)); // expand any year group these rows land in, even if it was collapsed
     count++;
   });
