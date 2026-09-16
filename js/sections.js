@@ -66,6 +66,13 @@ function renderSectionsList(){
     // nobody accidentally adds them to a new section, but one already on a
     // section keeps showing normally above via subjectById() regardless.
     const availableSubjects = state.subjects.filter(s=>!sec.subjectIds.includes(s.id) && !s.archived);
+    // Only offered when a year actually has 2+ active curricula at once
+    // (e.g. an old curriculum still running for continuing/irregular
+    // students alongside a new one) — otherwise there's nothing to choose
+    // between and the extra dropdown would just be clutter.
+    const curriculaForYear = Array.from(new Set(
+      state.subjects.filter(s=>s.year===sec.year && !s.archived && s.curriculum).map(s=>s.curriculum)
+    )).sort();
     const isOpen = !collapsedSectionIds.has(sec.id);
     const card = el(`<details class="section-card"${isOpen?' open':''}>
       <summary>
@@ -103,6 +110,11 @@ function renderSectionsList(){
             <option value="2nd">2nd Semester</option>
             <option value="summer">Summer</option>
           </select>
+          ${curriculaForYear.length>1 ? `
+          <select class="addAllCurrSelect" data-sec="${sec.id}" style="min-width:160px;" title="Subjects with no curriculum set are treated as shared/general-ed and get added no matter which curriculum you pick here">
+            <option value="">All curricula</option>
+            ${curriculaForYear.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("")}
+          </select>` : ''}
           <button class="btn btn-sm addAllSemBtn" data-sec="${sec.id}" title="Adds every non-archived ${YEAR_LABELS[sec.year]} subject offered in the chosen semester (plus any marked 'Both Semesters') that isn't already on this section">Add All Subjects for Semester</button>
         </div>
       </div>
@@ -150,14 +162,21 @@ document.getElementById('sectionsList').addEventListener('click', function(e){
   if(addAllBtn){
     const sec = sectionById(addAllBtn.dataset.sec);
     const semSel = document.querySelector(`.addAllSemSelect[data-sec="${addAllBtn.dataset.sec}"]`);
+    const currSel = document.querySelector(`.addAllCurrSelect[data-sec="${addAllBtn.dataset.sec}"]`);
     const sem = semSel.value;
+    const curriculum = currSel ? currSel.value : '';
     // Same-year, non-archived subjects offered that semester (or "both
     // semesters") that aren't already on this section — lets a chair
     // populate a whole semester's worth of subjects in one click instead
-    // of adding them one at a time.
+    // of adding them one at a time. When a curriculum is picked (only
+    // possible when the year has 2+ curricula in use), subjects tagged
+    // with a DIFFERENT curriculum are excluded — but a subject with no
+    // curriculum set at all is treated as shared/general-ed and is
+    // included regardless of which curriculum is selected.
     const toAdd = state.subjects.filter(s=>
       s.year === sec.year && !s.archived && !sec.subjectIds.includes(s.id) &&
-      (s.semester === sem || s.semester === 'both')
+      (s.semester === sem || s.semester === 'both') &&
+      (!curriculum || !s.curriculum || s.curriculum === curriculum)
     );
     if(toAdd.length === 0){
       alert("No matching subjects to add — they may already be on this section, or none exist for "+YEAR_LABELS[sec.year]+" in that semester.");
