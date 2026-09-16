@@ -589,7 +589,10 @@ function renderChrome(activeKey){
     });
     document.getElementById('logoutBtn').addEventListener('click', async function(){
       const ni = await waitForIdentityWidget();
-      if(ni) ni.logout();
+      // logout() makes a network call to invalidate the session — it must
+      // be awaited, otherwise the next page loads before the old session
+      // is actually cleared and just sees the same stale logged-in user.
+      if(ni){ try{ await ni.logout(); }catch(e){} }
       location.href = 'index.html';
     });
   }
@@ -657,7 +660,7 @@ export async function bootSession(activeKey){
     </div>`;
     document.getElementById('stuckLogoutBtn').addEventListener('click', async function(){
       const ni = await waitForIdentityWidget();
-      if(ni) ni.logout();
+      if(ni){ try{ await ni.logout(); }catch(e){} }
       location.reload();
     });
     return false;
