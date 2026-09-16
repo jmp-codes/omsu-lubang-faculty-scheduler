@@ -33,6 +33,7 @@ export function defaultState(){
     assignments: {}, // `${sectionId}::${subjectId}` -> facultyId — shared/registrar-owned
     syncPref: {},    // `${year}::${subjectId}` -> true/false — department-owned
     yearPref: {},    // year -> 'morning'|'afternoon'|'none' — shared/registrar-owned
+    sameDayGroups: [], // [{id, subjectIds:[...]}] — subjects that should land on the same weekday for a section taking 2+ of them (e.g. NSTP + PE) — shared/registrar-owned
     schedule: [],    // placed blocks — shared/registrar-owned
     manualRemoved: {}, // blockId -> true — shared/registrar-owned
     previousSchedule: [],      // one-level undo backup — shared/registrar-owned
@@ -233,6 +234,7 @@ export async function loadSharedData(){
 export async function saveSharedData(){
   const payload = {
     rooms: state.rooms, assignments: state.assignments, yearPref: state.yearPref,
+    sameDayGroups: state.sameDayGroups,
     schedule: state.schedule, manualRemoved: state.manualRemoved,
     previousSchedule: state.previousSchedule, previousManualRemoved: state.previousManualRemoved,
     hasScheduleBackup: state.hasScheduleBackup
@@ -545,20 +547,23 @@ function wouldExceedBreakLimit(sectionId, facultyId, day, start, duration, exclu
 }
 
 // Finds a single free day/start/room for one contiguous block of `hours`
-// and, if found, pushes it onto state.schedule under `blockId`. `excludeDays`
-// (optional Set) removes specific days from consideration — used to force a
-// split lecture's second half onto a different day than its first half.
-// Returns true/false and never pushes a warning itself; callers decide
-// whether/how to report a final failure.
+// and, if found, pushes it onto state.schedule under `blockId`, returning
+// the day it landed on (or null on failure — never pushes a warning
+// itself; callers decide whether/how to report a final failure).
+// `excludeDays` (optional Set) removes specific days from consideration —
+// used to force a split lecture's second half onto a different day than
+// its first half. `preferDay`, if given, is tried before the normal
+// least-busy-day ordering (e.g. "Sat" for a preferSaturday subject, or a
+// same-day group's already-committed day — see tryPlaceSegment).
 //
 // Tries twice: first only considering slots that leave a real break after
 // MAX_CONTINUOUS_HOURS (for both the section and the instructor), then —
 // only if that finds nothing anywhere — again without that restriction, so
 // the break preference never actually blocks a class from being scheduled.
-function placeSegmentBlock(sec, subj, facultyId, segType, hours, blockId, excludeDays){
+function placeSegmentBlock(sec, subj, facultyId, segType, hours, blockId, excludeDays, preferDay){
   const attempt = (avoidLongRuns)=>{
     const starts = candidateStartHours(segType, sec.year);
-    let days = daysByLoad(subj.preferSaturday ? 'Sat' : null);
+    let days = daysByLoad(preferDay);
     if(excludeDays && excludeDays.size) days = days.filter(d=>!excludeDays.has(d));
     for(const day of days){
       for(const start of starts){
@@ -576,42 +581,50 @@ function placeSegmentBlock(sec, subj, facultyId, segType, hours, blockId, exclud
           facultyId, roomId: room.id, roomName: room.name,
           synced:false, manual:false
         });
-        return true;
+        return day;
       }
     }
-    return false;
+    return null;
   };
   return attempt(true) || attempt(false);
 }
 
-export function tryPlaceSegment(sec, subj, facultyId, segType, hours, warnings){
+// `opts.preferDay`, if set, overrides the subject's own preferSaturday for
+// day ordering — used to pull a same-day-group member (e.g. PE) onto the
+// day a sibling subject (e.g. NSTP) already landed on for this section.
+// `opts.noSplit`, if true, skips the lecture 2-day-split behavior entirely
+// — a subject that needs to land on one specific shared day shouldn't also
+// be splitting its own lecture across two OTHER days.
+// Returns the day the segment was actually placed on (or null on failure).
+export function tryPlaceSegment(sec, subj, facultyId, segType, hours, warnings, opts){
+  opts = opts || {};
+  const preferDay = opts.preferDay || (subj.preferSaturday ? 'Sat' : null);
   const baseBlockId = segmentBlockId(sec.id, subj.id, segType);
   // Lecture sessions are preferred split across two different days (e.g. a
   // 2-hour lecture placed as Monday 1h + Wednesday 1h) rather than as one
   // long block on a single day. This is tried FIRST; only when no valid
   // two-day placement exists does it fall back to a single contiguous
   // block covering the full duration (the previous behavior). Labs are
-  // never split — they still run as one continuous session.
-  if(segType === 'lecture' && hours >= 2){
+  // never split — they still run as one continuous session — and neither
+  // is any subject placed with opts.noSplit (same-day groups).
+  if(!opts.noSplit && segType === 'lecture' && hours >= 2){
     const part1 = Math.ceil(hours/2), part2 = hours - part1;
     if(part2 > 0){
       const blockId1 = baseBlockId + '#1', blockId2 = baseBlockId + '#2';
-      if(placeSegmentBlock(sec, subj, facultyId, segType, part1, blockId1, null)){
-        const usedDay = state.schedule.find(b=>b.blockId===blockId1).day;
-        if(placeSegmentBlock(sec, subj, facultyId, segType, part2, blockId2, new Set([usedDay]))){
-          return true;
-        }
+      const day1 = placeSegmentBlock(sec, subj, facultyId, segType, part1, blockId1, null, preferDay);
+      if(day1){
+        const day2 = placeSegmentBlock(sec, subj, facultyId, segType, part2, blockId2, new Set([day1]), preferDay);
+        if(day2) return day1;
         // Couldn't find a second day for the other half — undo the first
         // half and fall back to a single monolithic block below.
         state.schedule = state.schedule.filter(b=>b.blockId!==blockId1);
       }
     }
   }
-  if(placeSegmentBlock(sec, subj, facultyId, segType, hours, baseBlockId, null)){
-    return true;
-  }
+  const day = placeSegmentBlock(sec, subj, facultyId, segType, hours, baseBlockId, null, preferDay);
+  if(day) return day;
   warnings.push(`Could not place ${segType} for ${subj.code} (${sec.name}) — no free faculty/room/day-time combination found.`);
-  return false;
+  return null;
 }
 
 export function trySyncGroup(year, subjectId, sections, warnings){
@@ -632,7 +645,7 @@ export function trySyncGroup(year, subjectId, sections, warnings){
       });
       return;
     }
-        const starts = candidateStartHours(segType, year);
+    const starts = candidateStartHours(segType, year);
     // Same two-pass approach as placeSegmentBlock: first only accept a
     // day/time where NONE of the synced sections (or their instructors)
     // would end up with more than MAX_CONTINUOUS_HOURS unbroken; only if
@@ -641,11 +654,11 @@ export function trySyncGroup(year, subjectId, sections, warnings){
     // being scheduled together.
     const findSlot = (avoidLongRuns)=>{
       for(const day of daysByLoad(subj.preferSaturday ? 'Sat' : null)){
-         for(const start of starts){
-             if(start+hours > DAY_END) continue;
-             if(spansLunch(start, hours)) continue;
-             const usedRooms = new Set();
-             const plan = [];
+        for(const start of starts){
+          if(start+hours > DAY_END) continue;
+          if(spansLunch(start, hours)) continue;
+          const usedRooms = new Set();
+          const plan = [];
           let ok = true;
           for(const p of readyParts){
             const blockId = segmentBlockId(p.sec.id, subj.id, segType);
@@ -720,6 +733,20 @@ export function generateSchedule(){
     }
   });
 
+  // Same-day groups (e.g. NSTP + PE): if a section is taking 2+ subjects
+  // from the same group, find that group's id for a given subject — but
+  // only when it actually matters for THIS section (fewer than 2 of the
+  // group's subjects on the section's list means there's nothing to align).
+  function sameDayGroupIdFor(sec, subjId){
+    for(const g of state.sameDayGroups){
+      if(!g.subjectIds || !g.subjectIds.includes(subjId)) continue;
+      const memberCount = sec.subjectIds.filter(id=>g.subjectIds.includes(id)).length;
+      if(memberCount >= 2) return g.id;
+    }
+    return null;
+  }
+  const groupDayChosen = {}; // `${sectionId}::${groupId}` -> day already committed
+
   const offerings = buildOfferings().filter(o=>!handledOfferings.has(assignKey(o.section.id,o.subject.id)));
   offerings.sort((a,b)=> b.totalHours - a.totalHours);
   offerings.forEach(o=>{
@@ -727,9 +754,13 @@ export function generateSchedule(){
       warnings.push(`${o.subject.code} (${o.section.name}) has no instructor assigned — skipped.`);
       return;
     }
+    const groupId = sameDayGroupIdFor(o.section, o.subject.id);
+    const groupKey = groupId ? o.section.id+'::'+groupId : null;
+    const opts = groupId ? { preferDay: groupKey ? groupDayChosen[groupKey] : null, noSplit: true } : null;
     const segs = o.segments.slice().sort((a,b)=>b.hours-a.hours);
     segs.forEach(seg=>{
-      tryPlaceSegment(o.section, o.subject, o.facultyId, seg.segType, seg.hours, warnings);
+      const dayUsed = tryPlaceSegment(o.section, o.subject, o.facultyId, seg.segType, seg.hours, warnings, opts);
+      if(groupKey && dayUsed && !groupDayChosen[groupKey]) groupDayChosen[groupKey] = dayUsed;
     });
   });
 
