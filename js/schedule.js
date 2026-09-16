@@ -1,6 +1,6 @@
 import {
   state, el, escapeHtml, byId, facultyName, subjectById, roomById, sectionById,
-  assignKey, syncKey, YEAR_LABELS, DAYS, DAY_NAMES, DAY_START, DAY_END, TIME_STEP, hourLabel, timeRangeLabel,
+  assignKey, syncKey, YEAR_LABELS, DAYS, DAY_NAMES, DAY_START, DAY_END, TIME_STEP, spansLunch, hourLabel, timeRangeLabel,
   yearsInUse, downloadTextFile, toCsv, hasConflict, generateSchedule, expectedBlockIds, computeMissing,
   backupSchedule, revertSchedule, parseAdminUnits,
   bootSession, requireRegistrar, loadFacultyAll, loadSubjectsAll, loadSectionsAll, loadSyncPrefAll,
@@ -306,7 +306,7 @@ function openEditModal(opts){
           <select id="editDay">${DAYS.map(d=>`<option value="${d}" ${d===day?'selected':''}>${DAY_NAMES[d]}</option>`).join("")}</select>
         </div>
         <div class="field"><label>Start Time</label>
-          <select id="editStart">${(function(){let o='';for(let h=DAY_START; h<=DAY_END-duration; h+=TIME_STEP){o+=`<option value="${h}" ${h===start?'selected':''}>${hourLabel(h)}</option>`;} return o;})()}</select>
+                    <select id="editStart">${(function(){let o='';for(let h=DAY_START; h<=DAY_END-duration; h+=TIME_STEP){ if(h!==start && spansLunch(h,duration)) continue; o+=`<option value="${h}" ${h===start?'selected':''}>${hourLabel(h)}</option>`;} return o;})()}</select>
         </div>
         <div class="field wide"><label>Room</label>
           <select id="editRoom">
