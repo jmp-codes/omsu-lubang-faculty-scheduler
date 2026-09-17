@@ -2,7 +2,7 @@ import {
   state, el, escapeHtml, byId, facultyName, subjectById, roomById, sectionById,
   assignKey, syncKey, YEAR_LABELS, DAYS, DAY_NAMES, DAY_START, DAY_END, TIME_STEP, spansLunch, hourLabel, timeRangeLabel,
   yearsInUse, downloadTextFile, toCsv, hasConflict, generateSchedule, expectedBlockIds, computeMissing,
-  backupSchedule, revertSchedule, parseAdminUnits,
+  backupSchedule, revertSchedule, parseAdminUnits, rescheduleBlockWithCascade,
   bootSession, requireRegistrar, loadFacultyAll, loadSubjectsAll, loadSectionsAll, loadSyncPrefAll,
   loadSharedData, persistSharedData
 } from './shared.js';
@@ -214,6 +214,10 @@ function renderScheduleGrid(){
   let thead = '<thead><tr><th>Time</th>' + DAYS.map(d=>`<th>${DAY_NAMES[d]}</th>`).join("") + '</tr></thead>';
   let rows = '';
   const skip = {};
+  // Drag-and-drop rescheduling only makes unambiguous sense when the grid
+  // is filtered to one section or one faculty member — see the drop
+  // handler below for why "By Room" / "Full View" are excluded.
+  const draggableView = currentView==='section' || currentView==='faculty';
   for(let h=DAY_START; h<DAY_END; h+=TIME_STEP){
     rows += `<tr><td class="time-col">${hourLabel(h)}</td>`;
     DAYS.forEach(day=>{
@@ -224,7 +228,7 @@ function renderScheduleGrid(){
       if(block){
         const span = Math.max(1, Math.round(block.duration / TIME_STEP));
         for(let k=1;k<span;k++) skip[day+"_"+(h+k*TIME_STEP)] = true;
-        rows += `<td rowspan="${span}"><div class="block ${block.type} ${block.manual?'manual':''}" data-block="${block.blockId}">
+        rows += `<td rowspan="${span}" data-day="${day}" data-start="${h}"><div class="block ${block.type} ${block.manual?'manual':''}" data-block="${block.blockId}"${draggableView?' draggable="true"':''}>
           <div class="b-title">${escapeHtml(block.subject)}</div>
           <div class="b-sub">${currentView!=='section'?escapeHtml(block.sectionName)+' · ':''}${currentView!=='faculty'?escapeHtml(facultyName(block.facultyId))+' · ':''}${currentView!=='room'?escapeHtml(block.roomName):''}</div>
           <div class="b-sub">${timeRangeLabel(block.start,block.duration)}</div>
@@ -232,9 +236,9 @@ function renderScheduleGrid(){
       } else if(ext){
         const span = Math.max(1, Math.round(ext.duration / TIME_STEP));
         for(let k=1;k<span;k++) skip[day+"_"+(h+k*TIME_STEP)] = true;
-        rows += `<td rowspan="${span}"><div class="ext-block">${escapeHtml(ext.label)} (${timeRangeLabel(ext.start,ext.duration)})</div></td>`;
+        rows += `<td rowspan="${span}" data-day="${day}" data-start="${h}"><div class="ext-block">${escapeHtml(ext.label)} (${timeRangeLabel(ext.start,ext.duration)})</div></td>`;
       } else {
-        rows += `<td></td>`;
+        rows += `<td data-day="${day}" data-start="${h}"></td>`;
       }
     });
     rows += `</tr>`;
@@ -275,6 +279,39 @@ document.getElementById('scheduleView').addEventListener('click', function(e){
   const block = state.schedule.find(x=>x.blockId===blockId);
   if(!block) return;
   openEditModal({blockId, isNew:false, block});
+});
+
+/* ---- Drag-and-drop rescheduling ---- */
+document.getElementById('scheduleView').addEventListener('dragstart', function(e){
+  const b = e.target.closest('.block[draggable="true"]');
+  if(!b){ e.preventDefault(); return; }
+  e.dataTransfer.setData('text/plain', b.dataset.block);
+  e.dataTransfer.effectAllowed = 'move';
+});
+
+document.getElementById('scheduleView').addEventListener('dragover', function(e){
+  if(!e.target.closest('td[data-day]')) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+});
+
+document.getElementById('scheduleView').addEventListener('drop', function(e){
+  const cell = e.target.closest('td[data-day]');
+  if(!cell) return;
+  e.preventDefault();
+  const blockId = e.dataTransfer.getData('text/plain');
+  if(!blockId) return;
+  const result = rescheduleBlockWithCascade(blockId, cell.dataset.day, parseFloat(cell.dataset.start));
+  if(!result.ok){
+    alert("Couldn't move that class there: " + result.reason);
+    return;
+  }
+  renderScheduleTab();
+  const bumped = result.shifted.filter(s=>s.blockId!==blockId);
+  if(bumped.length){
+    alert("Moved. To keep the break rule and avoid overlaps, this also shifted: "
+      + bumped.map(s=>`${s.subject} → ${DAY_NAMES[s.day]} ${hourLabel(s.start)}`).join(", "));
+  }
 });
 
 /* ---- Manual edit modal ---- */
