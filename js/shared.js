@@ -226,8 +226,6 @@ export async function loadSubjectsAll(){ state.subjects = await apiFetch('/api/s
 export async function loadSectionsAll(){ state.sections = await apiFetch('/api/sections?scope=all'); }
 export async function loadSyncPrefAll(){ state.syncPref = await apiFetch('/api/sync-pref?scope=all'); }
 
-export async function loadSyncPrefAll(){ state.syncPref = await apiFetch('/api/sync-pref?scope=all'); }
-
 // Lightweight, read-only {id,name,department} list of EVERY faculty member
 // across EVERY department (available to a chair too, unlike the "*All"
 // loaders above which are registrar-only) — used solely to warn about a
@@ -939,6 +937,19 @@ const NAV_ITEMS = [
   {key:'schedule', href:'schedule.html', label:'Generate Schedule', roles:['registrar']}
 ];
 
+// Points the browser tab's favicon at the OMSU seal. Done here (once, at
+// chrome render time) instead of a <link rel="icon"> in every page's
+// <head> — same result, one place to maintain instead of seven HTML files.
+function ensureFavicon(){
+  let link = document.querySelector("link[rel~='icon']");
+  if(!link){
+    link = document.createElement('link');
+    link.rel = 'icon';
+    document.head.appendChild(link);
+  }
+  link.href = 'assets/omsu-logo.png';
+}
+
 function renderChrome(activeKey){
   const headerMount = document.getElementById('chromeHeader');
   const navMount = document.getElementById('chromeNav');
@@ -949,9 +960,12 @@ function renderChrome(activeKey){
     headerMount.innerHTML = `
       <header class="app-header">
         <div class="row" style="justify-content:space-between; align-items:flex-start;">
-          <div>
-            <h1>Faculty Scheduler</h1>
-            <div class="sub">Faculty, subjects, rooms &amp; sections — auto-generated weekly schedule</div>
+          <div class="row" style="align-items:center; gap:14px;">
+            <img src="assets/omsu-logo.png" alt="Occidental Mindoro State University seal" class="brand-logo">
+            <div>
+              <h1>Faculty Scheduler</h1>
+              <div class="sub">Occidental Mindoro State University — Faculty, subjects, rooms &amp; sections — auto-generated weekly schedule</div>
+            </div>
           </div>
           <div class="row" style="flex:none; align-items:center;">
             <div class="user-badge">
@@ -965,6 +979,7 @@ function renderChrome(activeKey){
         <div id="deptBar"></div>
       </header>
     `;
+    ensureFavicon();
     document.getElementById('exportDataBtn').addEventListener('click', function(){
       const stamp = new Date().toISOString().slice(0,10);
       downloadTextFile("faculty-scheduler-"+activeKey+"-"+stamp+".json", "application/json", JSON.stringify(state, null, 2));
