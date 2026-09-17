@@ -1,11 +1,39 @@
 import {
   state, uid, el, escapeHtml, timeRangeLabel, byId,
   DAYS, DAY_START, DAY_END, hourLabel, parseDelimitedText,
-  bootSession, wireDeptBar, loadFaculty, persistFaculty
+  bootSession, wireDeptBar, loadFaculty, persistFaculty,
+  session, loadFacultyDirectory
 } from './shared.js';
 
 let editingFacultyId = null;
 const facultyExtOpen = {};
+
+// Loose name-normalization for duplicate detection: case/whitespace/
+// punctuation insensitive. Not meant to be bulletproof — just enough to
+// flag the common "same person, entered again under another department"
+// case for a human to actually decide on (see facSaveBtn/facBulkImportBtn
+// below). A false positive just means an extra confirm() the registrar
+// dismisses; a false negative just means no warning, same as today.
+function normalizeName(s){
+  return String(s||'').toLowerCase().replace(/[.,]/g,'').replace(/\s+/g,' ').trim();
+}
+function namesLikelyMatch(a,b){
+  const na = normalizeName(a), nb = normalizeName(b);
+  if(!na || !nb) return false;
+  if(na === nb) return true;
+  // Catches "Juan Dela Cruz" vs "Juan Dela Cruz Jr." style near-matches —
+  // guarded by a minimum length so short names don't trigger on substring
+  // coincidence (e.g. "Ann" inside "Anna").
+  if(na.length>=6 && nb.length>=6 && (na.includes(nb) || nb.includes(na))) return true;
+  return false;
+}
+// Finds a same-name faculty member in a DIFFERENT department than the one
+// currently being edited (state.faculty is already scoped to the current
+// department, so within-department dupes aren't this check's concern).
+function findCrossDeptDuplicate(directory, name){
+  const currentDept = session.manageDept || session.department;
+  return directory.find(f=> f.department!==currentDept && namesLikelyMatch(f.name, name));
+}
 
 function hourOptions(){
   let opts = "";
@@ -132,12 +160,31 @@ function resetFacultyForm(){
   document.getElementById('facCancelBtn').style.display = 'none';
 }
 document.getElementById('facCancelBtn').addEventListener('click', resetFacultyForm);
-document.getElementById('facSaveBtn').addEventListener('click', function(){
+document.getElementById('facSaveBtn').addEventListener('click', async function(){
   const name = document.getElementById('facName').value.trim();
   if(!name){ alert("Please enter the faculty name."); return; }
   const rank = document.getElementById('facRank').value;
   const qualifications = document.getElementById('facQuals').value.split("\n").map(s=>s.trim()).filter(Boolean);
   const designations = document.getElementById('facDesigs').value.split("\n").map(s=>s.trim()).filter(Boolean);
+
+  if(!editingFacultyId){
+    // Only worth checking when ADDING someone new — renaming an existing
+    // record isn't "did we just create a duplicate" moment. If the
+    // directory fetch itself fails for any reason, just skip the check
+    // rather than block adding faculty over it.
+    let directory = [];
+    try{ directory = await loadFacultyDirectory(); }catch(e){}
+    const dupe = findCrossDeptDuplicate(directory, name);
+    if(dupe){
+      const proceed = confirm(
+        `A faculty member named "${dupe.name}" already exists in ${dupe.department}.\n\n`+
+        `If this is the SAME person, click Cancel — then ask the registrar to assign them to this department's sections from the Assign Instructors page instead (it already lists every department's faculty together). Two separate records for the same person means the schedule can double-book their time without warning.\n\n`+
+        `Click OK only if this is actually a DIFFERENT person who happens to share that name.`
+      );
+      if(!proceed) return;
+    }
+  }
+
   if(editingFacultyId){
     const f = byId(state.faculty, editingFacultyId);
     Object.assign(f, {name, rank, qualifications, designations});
@@ -149,10 +196,33 @@ document.getElementById('facSaveBtn').addEventListener('click', function(){
   renderFacultyTable();
 });
 
-document.getElementById('facBulkImportBtn').addEventListener('click', function(){
+document.getElementById('facBulkImportBtn').addEventListener('click', async function(){
   const text = document.getElementById('facBulkText').value;
   if(!text.trim()){ alert("Paste some rows first."); return; }
   const rows = parseDelimitedText(text);
+
+  // Same cross-department duplicate check as the single Add Faculty form
+  // above, but batched into one confirm() so importing many rows doesn't
+  // pop a dialog per row.
+  let directory = [];
+  try{ directory = await loadFacultyDirectory(); }catch(e){}
+  const dupeNotes = [];
+  rows.forEach(cols=>{
+    const name = (cols[0]||'').trim();
+    if(!name) return;
+    const dupe = findCrossDeptDuplicate(directory, name);
+    if(dupe) dupeNotes.push(`"${name}" looks like "${dupe.name}" already in ${dupe.department}`);
+  });
+  if(dupeNotes.length){
+    const proceed = confirm(
+      `${dupeNotes.length} row(s) look like they might already exist in another department:\n\n`+
+      dupeNotes.join("\n")+
+      `\n\nIf any of these are the SAME person, click Cancel and remove that row — assign them to this department's sections from Assign Instructors instead of adding a duplicate record.\n\n`+
+      `Click OK to import all rows anyway.`
+    );
+    if(!proceed) return;
+  }
+
   let count = 0;
   rows.forEach(cols=>{
     const name = (cols[0]||'').trim();
