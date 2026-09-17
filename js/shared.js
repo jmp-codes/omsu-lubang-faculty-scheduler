@@ -492,41 +492,36 @@ export function findRoomFor(segType, sec, day, start, duration, excludeBlockId){
   return null;
 }
 
-// Nobody — student section or instructor — should sit through more than
-// this many back-to-back hours with zero gap before getting a break. Once
-// a gap does appear it has to be at least MIN_BREAK_HOURS (30 minutes,
-// which is also this schedule's finest granularity — a real 15-minute gap
-// isn't representable on this half-hour grid, but 30 minutes satisfies
-// "at least 15 minutes" too).
-const MAX_CONTINUOUS_HOURS = 3;
+// HARD RULE: nobody — student section or instructor — may sit through more
+// than MAX_CONSECUTIVE_CLASSES back-to-back classes (counted by class, not
+// by hours) before a break of at least MIN_BREAK_HOURS (30 minutes, this
+// schedule's finest granularity). Two back-to-back classes are fine; a 3rd
+// one immediately after requires a real gap first. A gap of >=30 minutes
+// resets the count back to 1. Unlike the softer preferences elsewhere in
+// this file, there is NO fallback pass that ignores this — see
+// placeSegmentBlock/trySyncGroup below.
+const MAX_CONSECUTIVE_CLASSES = 2;
 const MIN_BREAK_HOURS = 0.5;
 
 // Given a same-day list of {start,duration} blocks for one entity (a
-// section or a faculty member) PLUS one hypothetical new block, merges
-// every run of blocks that touch with no gap (or a gap smaller than
-// MIN_BREAK_HOURS) and reports whether any merged run exceeds
-// MAX_CONTINUOUS_HOURS. Existing schedules that already have a lone block
-// longer than the limit (e.g. a long lab) will always "exceed" no matter
-// where the new block goes — that's fine, since the caller falls back to
-// ignoring this check entirely when no slot can satisfy it (see
-// placeSegmentBlock), rather than refusing to schedule.
-function runExceedsContinuousLimit(existingBlocks, start, duration){
+// section or a faculty member) PLUS one hypothetical new block, counts
+// consecutive back-to-back classes — a gap smaller than MIN_BREAK_HOURS
+// doesn't count as a break, so those classes chain together — and reports
+// whether any chain would run longer than MAX_CONSECUTIVE_CLASSES. A gap
+// >= MIN_BREAK_HOURS always resets the chain back to 1.
+function runExceedsConsecutiveLimit(existingBlocks, start, duration){
   const all = existingBlocks.concat([{start, duration}]).sort((a,b)=>a.start-b.start);
-  let runStart = all[0].start, runEnd = all[0].start + all[0].duration;
+  let runLen = 1;
   for(let i=1;i<all.length;i++){
-    const b = all[i];
-    if(b.start - runEnd < MIN_BREAK_HOURS - 1e-9){
-      runEnd = Math.max(runEnd, b.start + b.duration);
-    } else {
-      runStart = b.start; runEnd = b.start + b.duration;
-    }
-    if(runEnd - runStart > MAX_CONTINUOUS_HOURS + 1e-9) return true;
+    const gap = all[i].start - (all[i-1].start + all[i-1].duration);
+    runLen = (gap < MIN_BREAK_HOURS - 1e-9) ? runLen + 1 : 1;
+    if(runLen > MAX_CONSECUTIVE_CLASSES) return true;
   }
-  return (runEnd - runStart) > MAX_CONTINUOUS_HOURS + 1e-9;
+  return false;
 }
 
 // Would placing this block push the SECTION's or the FACULTY member's day
-// past MAX_CONTINUOUS_HOURS of unbroken classes? Checked separately for
+// past MAX_CONSECUTIVE_CLASSES back-to-back classes? Checked separately for
 // each (a section's own back-to-back load, and — independently — that
 // instructor's own back-to-back teaching load across whatever sections
 // they teach), since either one having no break is worth avoiding.
@@ -534,12 +529,12 @@ function wouldExceedBreakLimit(sectionId, facultyId, day, start, duration, exclu
   const sectionBlocks = state.schedule
     .filter(b=> b.sectionId===sectionId && b.day===day && b.blockId!==excludeBlockId)
     .map(b=>({start:b.start, duration:b.duration}));
-  if(runExceedsContinuousLimit(sectionBlocks, start, duration)) return true;
+  if(runExceedsConsecutiveLimit(sectionBlocks, start, duration)) return true;
   if(facultyId){
     const facBlocks = state.schedule
       .filter(b=> b.facultyId===facultyId && b.day===day && b.blockId!==excludeBlockId)
       .map(b=>({start:b.start, duration:b.duration}));
-    if(runExceedsContinuousLimit(facBlocks, start, duration)) return true;
+    if(runExceedsConsecutiveLimit(facBlocks, start, duration)) return true;
   }
   return false;
 }
@@ -553,37 +548,36 @@ function wouldExceedBreakLimit(sectionId, facultyId, day, start, duration, exclu
 // its first half. `preferDay`, if given, is tried before the normal
 // least-busy-day ordering (e.g. "Sat" for a preferSaturday subject).
 //
-// Tries twice: first only considering slots that leave a real break after
-// MAX_CONTINUOUS_HOURS (for both the section and the instructor), then —
-// only if that finds nothing anywhere — again without that restriction, so
-// the break preference never actually blocks a class from being scheduled.
+// HARD rule (see MAX_CONSECUTIVE_CLASSES above): a slot that would push the
+// section OR the faculty member past the back-to-back class limit is never
+// used — there is no second, more lenient pass anymore. If no day/time/room
+// satisfies every rule (conflicts, lunch, the break limit), the segment is
+// left unscheduled (see the warning pushed by the caller) rather than
+// placed in violation.
 function placeSegmentBlock(sec, subj, facultyId, segType, hours, blockId, excludeDays, preferDay){
-  const attempt = (avoidLongRuns)=>{
-    const starts = candidateStartHours(segType, sec.year);
-    let days = daysByLoad(preferDay);
-    if(excludeDays && excludeDays.size) days = days.filter(d=>!excludeDays.has(d));
-    for(const day of days){
-      for(const start of starts){
-        if(start+hours > DAY_END) continue;
-        if(spansLunch(start, hours)) continue;
-        const test = {day, start, duration:hours, sectionId:sec.id, facultyId, roomId:null};
-        if(hasConflict(test, blockId)) continue;
-        if(avoidLongRuns && wouldExceedBreakLimit(sec.id, facultyId, day, start, hours, blockId)) continue;
-        const room = findRoomFor(segType, sec, day, start, hours, blockId);
-        if(!room) continue;
-        state.schedule.push({
-          blockId, day, start, duration:hours, type:segType,
-          sectionId:sec.id, sectionName:sec.name,
-          subjectId: subj.id, subject: subj.code+" — "+subj.name,
-          facultyId, roomId: room.id, roomName: room.name,
-          synced:false, manual:false
-        });
-        return day;
-      }
+  const starts = candidateStartHours(segType, sec.year);
+  let days = daysByLoad(preferDay);
+  if(excludeDays && excludeDays.size) days = days.filter(d=>!excludeDays.has(d));
+  for(const day of days){
+    for(const start of starts){
+      if(start+hours > DAY_END) continue;
+      if(spansLunch(start, hours)) continue;
+      const test = {day, start, duration:hours, sectionId:sec.id, facultyId, roomId:null};
+      if(hasConflict(test, blockId)) continue;
+      if(wouldExceedBreakLimit(sec.id, facultyId, day, start, hours, blockId)) continue;
+      const room = findRoomFor(segType, sec, day, start, hours, blockId);
+      if(!room) continue;
+      state.schedule.push({
+        blockId, day, start, duration:hours, type:segType,
+        sectionId:sec.id, sectionName:sec.name,
+        subjectId: subj.id, subject: subj.code+" — "+subj.name,
+        facultyId, roomId: room.id, roomName: room.name,
+        synced:false, manual:false
+      });
+      return day;
     }
-    return null;
-  };
-  return attempt(true) || attempt(false);
+  }
+  return null;
 }
 
 // Returns the day the segment was actually placed on (or null on failure).
@@ -638,13 +632,10 @@ export function trySyncGroup(year, subjectId, sections, warnings){
       return;
     }
     const starts = candidateStartHours(segType, year);
-    // Same two-pass approach as placeSegmentBlock: first only accept a
-    // day/time where NONE of the synced sections (or their instructors)
-    // would end up with more than MAX_CONTINUOUS_HOURS unbroken; only if
-    // no such slot exists for the whole group does a second pass drop that
-    // preference, so the break rule never prevents synced sections from
-    // being scheduled together.
-    const findSlot = (avoidLongRuns)=>{
+        // HARD rule: a day/time is only valid if NONE of the synced sections
+    // (or their instructors) would end up past the back-to-back class
+    // limit — there is no fallback pass that drops this check anymore.
+    const findSlot = ()=>{
       for(const day of daysByLoad(subj.preferSaturday ? 'Sat' : null)){
         for(const start of starts){
           if(start+hours > DAY_END) continue;
@@ -656,7 +647,7 @@ export function trySyncGroup(year, subjectId, sections, warnings){
             const blockId = segmentBlockId(p.sec.id, subj.id, segType);
             const test = {day, start, duration:hours, sectionId:p.sec.id, facultyId:p.facultyId, roomId:null};
             if(hasConflict(test, blockId)){ ok=false; break; }
-            if(avoidLongRuns && wouldExceedBreakLimit(p.sec.id, p.facultyId, day, start, hours, blockId)){ ok=false; break; }
+            if(wouldExceedBreakLimit(p.sec.id, p.facultyId, day, start, hours, blockId)){ ok=false; break; }
             const room = roomCandidatesFor(segType, p.sec).find(r=> !usedRooms.has(r.id)
               && !state.schedule.some(b=>b.blockId!==blockId && b.roomId===r.id && b.day===day && overlaps(b.start,b.duration,start,hours)));
             if(!room){ ok=false; break; }
@@ -668,7 +659,7 @@ export function trySyncGroup(year, subjectId, sections, warnings){
       }
       return null;
     };
-    const found = findSlot(true) || findSlot(false);
+    const found = findSlot();
     let placed = false;
     if(found){
       found.plan.forEach(({p,blockId,room})=>{
@@ -688,6 +679,63 @@ export function trySyncGroup(year, subjectId, sections, warnings){
     }
     parts.filter(p=>!p.facultyId).forEach(p=> warnings.push(`${subj.code} (${p.sec.name}) has no instructor assigned — skipped.`));
   });
+}
+export function rescheduleBlockWithCascade(blockId, newDay, newStart){
+  const before = state.schedule.map(b=>Object.assign({}, b));
+  const rollback = ()=>{ state.schedule = before; };
+
+  const block = state.schedule.find(b=>b.blockId===blockId);
+  if(!block) return {ok:false, reason:"That session no longer exists."};
+  const duration = block.duration;
+
+  if(newStart + duration > DAY_END) return {ok:false, reason:"That would run past the end of the day (8:30 PM)."};
+  if(spansLunch(newStart, duration)) return {ok:false, reason:"That would overlap the 12:00–1:00 lunch break."};
+
+  block.day = newDay;
+  block.start = newStart;
+  const conflict = hasConflict(block, blockId);
+  if(conflict){
+    if(conflict.type === 'room'){
+      const room = findRoomFor(block.type, sectionById(block.sectionId) || {id:block.sectionId, studentCount:0}, newDay, newStart, duration, blockId);
+      if(!room){ rollback(); return {ok:false, reason:"That slot is already taken and no other room is free at that time."}; }
+      block.roomId = room.id; block.roomName = room.name;
+    } else {
+      rollback();
+      const who = conflict.type==='faculty' ? 'the instructor already has a class' : conflict.type==='external' ? 'the instructor has an external commitment' : 'this section already has a class';
+      return {ok:false, reason:`That exact time is taken — ${who} then.`};
+    }
+  }
+  block.manual = true;
+
+  const dayBlocks = state.schedule
+    .filter(b=> b.sectionId===block.sectionId && b.day===newDay)
+    .sort((a,b)=>a.start-b.start);
+  for(let i=1;i<dayBlocks.length;i++){
+    const cur = dayBlocks[i];
+    let guard = 0;
+    while(
+      spansLunch(cur.start, cur.duration) ||
+      cur.start + cur.duration > DAY_END ||
+      hasConflict(cur, cur.blockId) ||
+      wouldExceedBreakLimit(cur.sectionId, cur.facultyId, cur.day, cur.start, cur.duration, cur.blockId)
+    ){
+      cur.start += TIME_STEP;
+      guard++;
+      if(cur.start + cur.duration > DAY_END || guard > 200){
+        rollback();
+        return {ok:false, reason:`Moving this class would leave "${cur.subject}" (${cur.sectionName}) with nowhere valid left on ${DAY_NAMES[newDay]}.`};
+      }
+    }
+  }
+
+  const shifted = [];
+  before.forEach(orig=>{
+    const now = state.schedule.find(b=>b.blockId===orig.blockId);
+    if(now && (now.day!==orig.day || now.start!==orig.start)) shifted.push({blockId: now.blockId, subject: now.subject, day: now.day, start: now.start});
+  });
+
+  persistSharedData();
+  return {ok:true, shifted};
 }
 
 export function backupSchedule(){
