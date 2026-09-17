@@ -42,7 +42,7 @@ document.getElementById('generateBtn').addEventListener('click', function(){
   if(warnings.length){
     wrap.innerHTML = `<div class="warn-box"><strong>${warnings.length} issue${warnings.length===1?'':'s'} during generation:</strong><ul>${warnings.map(w=>`<li>${escapeHtml(w)}</li>`).join("")}</ul></div>`;
   } else {
-    wrap.innerHTML = `<div class="warn-box" style="background:var(--teal-soft); border-color:var(--teal); color:#c9fff5;">All sessions were scheduled with no conflicts.</div>`;
+        wrap.innerHTML = `<div class="warn-box" style="background:var(--teal-soft); border-color:var(--teal); color:#dbe3ff;">All sessions were scheduled with no conflicts.</div>`;
   }
 });
 document.getElementById('clearScheduleBtn').addEventListener('click', function(){
