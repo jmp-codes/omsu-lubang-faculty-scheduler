@@ -226,6 +226,18 @@ export async function loadSubjectsAll(){ state.subjects = await apiFetch('/api/s
 export async function loadSectionsAll(){ state.sections = await apiFetch('/api/sections?scope=all'); }
 export async function loadSyncPrefAll(){ state.syncPref = await apiFetch('/api/sync-pref?scope=all'); }
 
+export async function loadSyncPrefAll(){ state.syncPref = await apiFetch('/api/sync-pref?scope=all'); }
+
+// Lightweight, read-only {id,name,department} list of EVERY faculty member
+// across EVERY department (available to a chair too, unlike the "*All"
+// loaders above which are registrar-only) — used solely to warn about a
+// likely duplicate faculty record before one gets created; see
+// js/faculty.js and netlify/functions/faculty-directory.js. Deliberately
+// does not touch state.faculty.
+export async function loadFacultyDirectory(){
+  return apiFetch('/api/faculty-directory');
+}
+
 export async function loadSharedData(){
   const data = await apiFetch('/api/shared-data');
   Object.assign(state, data);
