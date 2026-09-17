@@ -641,16 +641,30 @@ export function tryPlaceSegment(sec, subj, facultyId, segType, hours, warnings){
   // pair; only if room/faculty/day availability rules out BOTH pairs does
   // it fall back to one continuous 2-hour block on a single day (the
   // monolithic placement below) — this is the explicit fallback case.
-  if(segType === 'lab' && hours === 2){
+  //
+  // The SAME distribute-first/fallback-last treatment applies to the
+  // 2-hour LECTURE component of a laboratory subject (subj.type==='lab') —
+  // e.g. a subject with 2 lecture hrs + lab hrs should try 1hr+1hr on
+  // Mon/Wed or Tue/Thu, and only sit as one straight 2-hour block if no
+  // pair has room for both halves. This does NOT apply to a 2-hour
+  // lecture on a lecture-ONLY subject (subj.type!=='lab') — that case
+  // still always stays a single 2-hour block, per the rule below.
+  // subj.oneMeeting only ever exempts the LECTURE half from splitting (it's
+  // a "keep this lecture in one meeting" flag — see subjects.html) — it
+  // never affects the lab half, which always tries the day-pair split.
+  if(
+    (segType === 'lab' && hours === 2) ||
+    (segType === 'lecture' && hours === 2 && subj.type === 'lab' && !subj.oneMeeting)
+  ){
     const day1 = placeOnDayPair(sec, subj, facultyId, segType, 1, baseBlockId);
     if(day1) return day1;
   }
 
-  // A 2-hour lecture is never partitioned — always one single 2-hour
-  // block (falls straight through to the monolithic placement below).
-  // Any OTHER lecture length (e.g. 4 hours) keeps the previous generic
-  // two-day split-then-fallback behavior, since it isn't covered by a
-  // specific rule.
+  // A 2-hour lecture on a lecture-ONLY subject is never partitioned —
+  // always one single 2-hour block (falls straight through to the
+  // monolithic placement below). Any OTHER lecture length (e.g. 4 hours)
+  // keeps the previous generic two-day split-then-fallback behavior,
+  // since it isn't covered by a specific rule.
   if(!subj.oneMeeting && segType === 'lecture' && hours > 2 && hours !== 3){
     const part1 = Math.ceil(hours/2), part2 = hours - part1;
     if(part2 > 0){
