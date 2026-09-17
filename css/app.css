@@ -1,5 +1,10 @@
 
   :root{
+    /* --gold and --teal are tuned to Occidental Mindoro State University's
+       actual seal (sampled from the logo: navy blue ~#293991, gold
+       ~#ffd703) — brightened/darkened as needed to stay legible against
+       this dark theme, rather than left as the arbitrary brand-neutral
+       gold/teal this app started with. */
     --ink:#0b1220;
     --panel:#111a2d;
     --panel-2:#0e1626;
@@ -8,10 +13,10 @@
     --text:#e7e9f0;
     --muted:#93a0bd;
     --muted-2:#6b7796;
-    --gold:#d7b04f;
+    --gold:#e8bd3f;
     --gold-soft:#3a3320;
-    --teal:#3fd0c0;
-    --teal-soft:#123330;
+    --teal:#5977e0;
+    --teal-soft:#182252;
     --red:#e2596b;
     --red-soft:#3a1c22;
     --blue:#5b8def;
@@ -36,6 +41,7 @@
   }
   header.app-header h1{font-size:26px; color:#f3e6c4;}
   header.app-header .sub{color:var(--muted); font-size:13px;}
+  .brand-logo{ width:52px; height:52px; object-fit:contain; flex:none; }
   nav.tabs{
     display:flex; flex-wrap:wrap; gap:4px;
     padding:0 28px; margin-top:14px;
@@ -91,8 +97,8 @@
   .btn:hover{ border-color:var(--gold); color:#f3e6c4; }
   .btn-primary{ background:linear-gradient(180deg,#e7c766,var(--gold)); color:#241c04; border-color:#8a7228; }
   .btn-primary:hover{ filter:brightness(1.06); color:#241c04; }
-  .btn-teal{ background:linear-gradient(180deg,#5fe3d3,var(--teal)); color:#062522; border-color:#1f7a70; }
-  .btn-teal:hover{ filter:brightness(1.06); color:#062522;}
+  .btn-teal{ background:linear-gradient(180deg,#7f97ea,var(--teal)); color:#0d1230; border-color:#2c3f9e; }
+  .btn-teal:hover{ filter:brightness(1.06); color:#0d1230;}
   .btn-danger{ background:transparent; border-color:var(--red); color:var(--red); }
   .btn-danger:hover{ background:var(--red-soft); color:#ffd7dc; }
   .btn-sm{ padding:4px 9px; font-size:12px; border-radius:6px; }
@@ -104,7 +110,7 @@
   table tr:hover td{ background:rgba(255,255,255,0.015); }
   .badge{ display:inline-block; padding:2px 8px; border-radius:20px; font-size:11px; font-weight:700; letter-spacing:0.3px; }
   .badge-lab{ background:var(--gold-soft); color:var(--gold); border:1px solid #4a3f22; }
-  .badge-lecture{ background:var(--teal-soft); color:var(--teal); border:1px solid #1c4a44; }
+  .badge-lecture{ background:var(--teal-soft); color:var(--teal); border:1px solid #2a3a78; }
   .badge-danger{ background:var(--red-soft); color:var(--red); border:1px solid #4a2229; }
   .badge-muted{ background:rgba(255,255,255,0.05); color:var(--muted); border:1px solid var(--border); }
   .muted{ color:var(--muted); }
@@ -153,8 +159,8 @@
     height:100%; width:100%; padding:6px 8px; cursor:pointer; font-size:11.5px; line-height:1.3;
     display:flex; flex-direction:column; justify-content:center; gap:1px;
   }
-  .block.lecture{ background:linear-gradient(180deg, rgba(63,208,192,0.16), rgba(63,208,192,0.09)); border-left:3px solid var(--teal); }
-  .block.lab{ background:linear-gradient(180deg, rgba(215,176,79,0.18), rgba(215,176,79,0.10)); border-left:3px solid var(--gold); }
+  .block.lecture{ background:linear-gradient(180deg, rgba(89,119,224,0.18), rgba(89,119,224,0.10)); border-left:3px solid var(--teal); }
+  .block.lab{ background:linear-gradient(180deg, rgba(232,189,63,0.18), rgba(232,189,63,0.10)); border-left:3px solid var(--gold); }
   .block.manual{ outline:1px dashed var(--blue); outline-offset:-2px; }
   .block .b-title{ font-weight:700; color:var(--text); }
   .block .b-sub{ color:var(--muted); }
@@ -187,7 +193,7 @@
     .print-only{ display:block !important; color:#000; font-family:'Zilla Slab',serif; font-size:16px; margin-bottom:10px; }
     table.sched-grid, table.sched-grid *{ color:#000 !important; }
     table.sched-grid td, table.sched-grid th{ border:1px solid #999 !important; }
-    .block.lecture{ background:#eafbf8 !important; border-left:3px solid #000 !important; }
+    .block.lecture{ background:#eaeeff !important; border-left:3px solid #000 !important; }
     .block.lab{ background:#fdf6e3 !important; border-left:3px solid #000 !important; }
     .ext-block{ background:#f5e6e6 !important; border-left:3px solid #000 !important; color:#000 !important; }
     .agenda-day, .agenda-item{ color:#000 !important; }
