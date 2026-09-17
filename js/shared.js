@@ -580,20 +580,69 @@ function placeSegmentBlock(sec, subj, facultyId, segType, hours, blockId, exclud
   return null;
 }
 
+// The two "standard" day pairs a partitioned lecture/lab is allowed to
+// split across — never any other pair of days.
+const DAY_PAIRS = [['Mon','Wed'], ['Tue','Thu']];
+
+// Tries to place two equal-length halves of a segment on the two days of
+// ONE standard pair (Mon+Wed or Tue+Thu — never spread across any other
+// pair). Tries the currently lighter-loaded pair first, then the other;
+// within a pair, either day can end up first since both halves are the
+// same length. Returns the day the first half landed on (truthy) on
+// success, or null if neither pair has room for both halves.
+function placeOnDayPair(sec, subj, facultyId, segType, partHours, baseBlockId){
+  const load = {};
+  DAYS.forEach(d=>{ load[d] = 0; });
+  state.schedule.forEach(b=>{ load[b.day] = (load[b.day]||0) + b.duration; });
+  const pairs = DAY_PAIRS.slice().sort((a,b)=> (load[a[0]]+load[a[1]]) - (load[b[0]]+load[b[1]]));
+  for(const pair of pairs){
+    const outsidePair = new Set(DAYS.filter(d=>!pair.includes(d)));
+    const blockId1 = baseBlockId + '#1', blockId2 = baseBlockId + '#2';
+    const day1 = placeSegmentBlock(sec, subj, facultyId, segType, partHours, blockId1, outsidePair, pair[0]);
+    if(day1){
+      const secondDay = pair.find(d=>d!==day1);
+      const day2 = placeSegmentBlock(sec, subj, facultyId, segType, partHours, blockId2, new Set([...outsidePair, day1]), secondDay);
+      if(day2) return day1;
+      state.schedule = state.schedule.filter(b=>b.blockId!==blockId1);
+    }
+  }
+  return null;
+}
+
 // Returns the day the segment was actually placed on (or null on failure).
 export function tryPlaceSegment(sec, subj, facultyId, segType, hours, warnings){
   const preferDay = subj.preferSaturday ? 'Sat' : null;
   const baseBlockId = segmentBlockId(sec.id, subj.id, segType);
-  // Lecture sessions are preferred split across two different days (e.g. a
-  // 2-hour lecture placed as Monday 1h + Wednesday 1h) rather than as one
-  // long block on a single day. This is tried FIRST; only when no valid
-  // two-day placement exists does it fall back to a single contiguous
-  // block covering the full duration (the previous behavior). Labs are
-  // never split — they still run as one continuous session — and neither
-  // is any subject flagged subj.oneMeeting (registrar-set on the Subjects
-  // page for subjects like NSTP/PE that should always land as a single,
-  // unbroken class meeting rather than being divided across two days).
-  if(!subj.oneMeeting && segType === 'lecture' && hours >= 2){
+
+  // HARD RULE: a 3-hour lecture is always split into two 1.5-hour halves
+  // on ONE standard day pair (Mon+Wed or Tue+Thu) — never left as a single
+  // 3-hour block, and never spread across any other pair of days. There is
+  // no fallback here (unlike the lab case below): if no pair has room, the
+  // segment stays unscheduled and shows up in Unscheduled Sessions.
+  // subj.oneMeeting still wins if the registrar explicitly asked for one
+  // single meeting regardless of length.
+  if(!subj.oneMeeting && segType === 'lecture' && hours === 3){
+    const day1 = placeOnDayPair(sec, subj, facultyId, segType, hours/2, baseBlockId);
+    if(day1) return day1;
+    warnings.push(`Could not split the 3-hour lecture for ${subj.code} (${sec.name}) across Mon/Wed or Tue/Thu — no valid pair found.`);
+    return null;
+  }
+
+  // A 2-hour lab is tried FIRST as two 1-hour sessions on a standard day
+  // pair; only if room/faculty/day availability rules out BOTH pairs does
+  // it fall back to one continuous 2-hour block on a single day (the
+  // monolithic placement below) — this is the explicit fallback case.
+  if(segType === 'lab' && hours === 2){
+    const day1 = placeOnDayPair(sec, subj, facultyId, segType, 1, baseBlockId);
+    if(day1) return day1;
+  }
+
+  // A 2-hour lecture is never partitioned — always one single 2-hour
+  // block (falls straight through to the monolithic placement below).
+  // Any OTHER lecture length (e.g. 4 hours) keeps the previous generic
+  // two-day split-then-fallback behavior, since it isn't covered by a
+  // specific rule.
+  if(!subj.oneMeeting && segType === 'lecture' && hours > 2 && hours !== 3){
     const part1 = Math.ceil(hours/2), part2 = hours - part1;
     if(part2 > 0){
       const blockId1 = baseBlockId + '#1', blockId2 = baseBlockId + '#2';
@@ -601,12 +650,11 @@ export function tryPlaceSegment(sec, subj, facultyId, segType, hours, warnings){
       if(day1){
         const day2 = placeSegmentBlock(sec, subj, facultyId, segType, part2, blockId2, new Set([day1]), preferDay);
         if(day2) return day1;
-        // Couldn't find a second day for the other half — undo the first
-        // half and fall back to a single monolithic block below.
         state.schedule = state.schedule.filter(b=>b.blockId!==blockId1);
       }
     }
   }
+
   const day = placeSegmentBlock(sec, subj, facultyId, segType, hours, baseBlockId, null, preferDay);
   if(day) return day;
   warnings.push(`Could not place ${segType} for ${subj.code} (${sec.name}) — no free faculty/room/day-time combination found.`);
@@ -632,7 +680,7 @@ export function trySyncGroup(year, subjectId, sections, warnings){
       return;
     }
     const starts = candidateStartHours(segType, year);
-        // HARD rule: a day/time is only valid if NONE of the synced sections
+    // HARD rule: a day/time is only valid if NONE of the synced sections
     // (or their instructors) would end up past the back-to-back class
     // limit — there is no fallback pass that drops this check anymore.
     const findSlot = ()=>{
@@ -680,6 +728,16 @@ export function trySyncGroup(year, subjectId, sections, warnings){
     parts.filter(p=>!p.facultyId).forEach(p=> warnings.push(`${subj.code} (${p.sec.name}) has no instructor assigned — skipped.`));
   });
 }
+
+// Drag-and-drop rescheduling: moves one block to a new day/start, then
+// walks that section's remaining blocks on the destination day left to
+// right, nudging any that now overlap it — or now break the room/faculty
+// availability rules, or now violate MAX_CONSECUTIVE_CLASSES — forward in
+// TIME_STEP steps ("ripple" shifting) until each is valid again. Every
+// rule stays hard (conflicts, lunch, the day bounds, the break limit); the
+// whole move is rolled back — nothing in state.schedule changes — if the
+// ripple can't be resolved before the day runs out. Callers should treat
+// {ok:false} as "show the conflict to the user", never as a partial move.
 export function rescheduleBlockWithCascade(blockId, newDay, newStart){
   const before = state.schedule.map(b=>Object.assign({}, b));
   const rollback = ()=>{ state.schedule = before; };
