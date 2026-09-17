@@ -49,6 +49,25 @@ export let state = defaultState();
 // on the Faculty/Subjects/Sections pages (chairs never change this).
 export let session = { user: null, email: null, isRegistrar: false, department: null, manageDept: null };
 
+// This is a classic multi-page app — every nav click is a full page load,
+// so the `session` object above gets rebuilt from nothing on every single
+// page. Without saving the registrar's chosen department SOMEWHERE that
+// survives that reload, bootSession() below has no way to know they'd
+// picked BEEd a moment ago on the previous page, and always falls back to
+// DEPARTMENTS[0] — which looked like "switching to BEEd keeps snapping
+// back to BSIT every time I change tabs." sessionStorage (cleared when the
+// tab closes, unlike localStorage) is the right place for this: it's a
+// per-tab "what was I looking at" convenience, not real data, so it's fine
+// if a private/locked-down browser blocks it — this just falls back to the
+// old default-to-BSIT behavior in that case rather than breaking the page.
+const MANAGE_DEPT_KEY = 'fs_manageDept';
+function loadSavedManageDept(){
+  try{ return sessionStorage.getItem(MANAGE_DEPT_KEY); }catch(e){ return null; }
+}
+function saveManageDept(dept){
+  try{ sessionStorage.setItem(MANAGE_DEPT_KEY, dept); }catch(e){}
+}
+
 function waitForIdentityWidget(){
   return new Promise((resolve)=>{
     if(window.netlifyIdentity){ resolve(window.netlifyIdentity); return; }
@@ -1021,6 +1040,7 @@ function renderDeptBar(onChange){
     </div>`;
   document.getElementById('deptSelect').addEventListener('change', async function(e){
     session.manageDept = e.target.value;
+    saveManageDept(session.manageDept);
     await onChange();
   });
 }
@@ -1040,7 +1060,12 @@ export async function bootSession(activeKey){
   session.email = user.email;
   session.isRegistrar = role.isRegistrar;
   session.department = role.department;
-  session.manageDept = role.isRegistrar ? DEPARTMENTS[0] : role.department;
+  if(role.isRegistrar){
+    const saved = loadSavedManageDept();
+    session.manageDept = (saved && DEPARTMENTS.includes(saved)) ? saved : DEPARTMENTS[0];
+  } else {
+    session.manageDept = role.department;
+  }
 
   if(!session.isRegistrar && !session.department){
     // Note for whoever hits this: if a role was JUST added in Netlify
