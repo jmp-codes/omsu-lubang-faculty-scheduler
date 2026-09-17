@@ -493,48 +493,56 @@ export function findRoomFor(segType, sec, day, start, duration, excludeBlockId){
 }
 
 // HARD RULE: nobody — student section or instructor — may sit through more
-// than MAX_CONSECUTIVE_CLASSES back-to-back classes (counted by class, not
-// by hours) before a break of at least MIN_BREAK_HOURS (30 minutes, this
-// schedule's finest granularity). Two back-to-back classes are fine; a 3rd
-// one immediately after requires a real gap first. A gap of >=30 minutes
-// resets the count back to 1. Unlike the softer preferences elsewhere in
-// this file, there is NO fallback pass that ignores this — see
-// placeSegmentBlock/trySyncGroup below.
-const MAX_CONSECUTIVE_CLASSES = 2;
+// than MAX_CONTINUOUS_HOURS of back-to-back LECTURE time before a break of
+// at least MIN_BREAK_HOURS (30 minutes, this schedule's finest
+// granularity). Laboratory periods are entirely exempt: a lab never needs
+// a break of its own no matter how long it runs, and time spent in a lab
+// doesn't count toward (or get interrupted by) a lecture run — see the
+// `type!=='lab'` filtering and the segType check in wouldExceedBreakLimit
+// below. Unlike the softer preferences elsewhere in this file, there is NO
+// fallback pass that ignores this — see placeSegmentBlock/trySyncGroup.
+const MAX_CONTINUOUS_HOURS = 2;
 const MIN_BREAK_HOURS = 0.5;
 
-// Given a same-day list of {start,duration} blocks for one entity (a
-// section or a faculty member) PLUS one hypothetical new block, counts
-// consecutive back-to-back classes — a gap smaller than MIN_BREAK_HOURS
-// doesn't count as a break, so those classes chain together — and reports
-// whether any chain would run longer than MAX_CONSECUTIVE_CLASSES. A gap
-// >= MIN_BREAK_HOURS always resets the chain back to 1.
-function runExceedsConsecutiveLimit(existingBlocks, start, duration){
+// Given a same-day list of {start,duration} LECTURE blocks for one entity
+// (a section or a faculty member) PLUS one hypothetical new lecture block,
+// merges every run of blocks that touch with no real gap (a gap smaller
+// than MIN_BREAK_HOURS doesn't count as a break) and reports whether the
+// merged run's total duration would exceed MAX_CONTINUOUS_HOURS.
+function runExceedsContinuousLimit(existingBlocks, start, duration){
   const all = existingBlocks.concat([{start, duration}]).sort((a,b)=>a.start-b.start);
-  let runLen = 1;
+  let runStart = all[0].start, runEnd = all[0].start + all[0].duration;
   for(let i=1;i<all.length;i++){
-    const gap = all[i].start - (all[i-1].start + all[i-1].duration);
-    runLen = (gap < MIN_BREAK_HOURS - 1e-9) ? runLen + 1 : 1;
-    if(runLen > MAX_CONSECUTIVE_CLASSES) return true;
+    const b = all[i];
+    if(b.start - runEnd < MIN_BREAK_HOURS - 1e-9){
+      runEnd = Math.max(runEnd, b.start + b.duration);
+    } else {
+      runStart = b.start; runEnd = b.start + b.duration;
+    }
+    if(runEnd - runStart > MAX_CONTINUOUS_HOURS + 1e-9) return true;
   }
-  return false;
+  return (runEnd - runStart) > MAX_CONTINUOUS_HOURS + 1e-9;
 }
 
 // Would placing this block push the SECTION's or the FACULTY member's day
-// past MAX_CONSECUTIVE_CLASSES back-to-back classes? Checked separately for
-// each (a section's own back-to-back load, and — independently — that
-// instructor's own back-to-back teaching load across whatever sections
-// they teach), since either one having no break is worth avoiding.
-function wouldExceedBreakLimit(sectionId, facultyId, day, start, duration, excludeBlockId){
+// past MAX_CONTINUOUS_HOURS of unbroken LECTURE time? Checked separately
+// for each. Laboratory periods are excluded entirely: placing a lab never
+// triggers this check (segType==='lab' short-circuits below), and existing
+// lab blocks are filtered out of both lists so a lab sitting in the middle
+// of the day never counts toward — or gets treated as part of — a lecture
+// run (its real wall-clock duration still naturally provides the gap that
+// resets any lecture run around it).
+function wouldExceedBreakLimit(sectionId, facultyId, day, start, duration, excludeBlockId, segType){
+  if(segType === 'lab') return false;
   const sectionBlocks = state.schedule
-    .filter(b=> b.sectionId===sectionId && b.day===day && b.blockId!==excludeBlockId)
+    .filter(b=> b.sectionId===sectionId && b.day===day && b.blockId!==excludeBlockId && b.type!=='lab')
     .map(b=>({start:b.start, duration:b.duration}));
-  if(runExceedsConsecutiveLimit(sectionBlocks, start, duration)) return true;
+  if(runExceedsContinuousLimit(sectionBlocks, start, duration)) return true;
   if(facultyId){
     const facBlocks = state.schedule
-      .filter(b=> b.facultyId===facultyId && b.day===day && b.blockId!==excludeBlockId)
+      .filter(b=> b.facultyId===facultyId && b.day===day && b.blockId!==excludeBlockId && b.type!=='lab')
       .map(b=>({start:b.start, duration:b.duration}));
-    if(runExceedsConsecutiveLimit(facBlocks, start, duration)) return true;
+    if(runExceedsContinuousLimit(facBlocks, start, duration)) return true;
   }
   return false;
 }
@@ -548,10 +556,11 @@ function wouldExceedBreakLimit(sectionId, facultyId, day, start, duration, exclu
 // its first half. `preferDay`, if given, is tried before the normal
 // least-busy-day ordering (e.g. "Sat" for a preferSaturday subject).
 //
-// HARD rule (see MAX_CONSECUTIVE_CLASSES above): a slot that would push the
-// section OR the faculty member past the back-to-back class limit is never
-// used — there is no second, more lenient pass anymore. If no day/time/room
-// satisfies every rule (conflicts, lunch, the break limit), the segment is
+// HARD rule (see MAX_CONTINUOUS_HOURS above): a slot that would push the
+// section OR the faculty member past that much unbroken lecture time is
+// never used — there is no second, more lenient pass anymore. If no
+// day/time/room satisfies every rule (conflicts, lunch, the break limit,
+// lab exemption included), the segment is
 // left unscheduled (see the warning pushed by the caller) rather than
 // placed in violation.
 function placeSegmentBlock(sec, subj, facultyId, segType, hours, blockId, excludeDays, preferDay){
@@ -564,7 +573,7 @@ function placeSegmentBlock(sec, subj, facultyId, segType, hours, blockId, exclud
       if(spansLunch(start, hours)) continue;
       const test = {day, start, duration:hours, sectionId:sec.id, facultyId, roomId:null};
       if(hasConflict(test, blockId)) continue;
-      if(wouldExceedBreakLimit(sec.id, facultyId, day, start, hours, blockId)) continue;
+      if(wouldExceedBreakLimit(sec.id, facultyId, day, start, hours, blockId, segType)) continue;
       const room = findRoomFor(segType, sec, day, start, hours, blockId);
       if(!room) continue;
       state.schedule.push({
@@ -695,7 +704,7 @@ export function trySyncGroup(year, subjectId, sections, warnings){
             const blockId = segmentBlockId(p.sec.id, subj.id, segType);
             const test = {day, start, duration:hours, sectionId:p.sec.id, facultyId:p.facultyId, roomId:null};
             if(hasConflict(test, blockId)){ ok=false; break; }
-            if(wouldExceedBreakLimit(p.sec.id, p.facultyId, day, start, hours, blockId)){ ok=false; break; }
+            if(wouldExceedBreakLimit(p.sec.id, p.facultyId, day, start, hours, blockId, segType)){ ok=false; break; }
             const room = roomCandidatesFor(segType, p.sec).find(r=> !usedRooms.has(r.id)
               && !state.schedule.some(b=>b.blockId!==blockId && b.roomId===r.id && b.day===day && overlaps(b.start,b.duration,start,hours)));
             if(!room){ ok=false; break; }
@@ -732,8 +741,9 @@ export function trySyncGroup(year, subjectId, sections, warnings){
 // Drag-and-drop rescheduling: moves one block to a new day/start, then
 // walks that section's remaining blocks on the destination day left to
 // right, nudging any that now overlap it — or now break the room/faculty
-// availability rules, or now violate MAX_CONSECUTIVE_CLASSES — forward in
-// TIME_STEP steps ("ripple" shifting) until each is valid again. Every
+// availability rules, or now violate MAX_CONTINUOUS_HOURS of unbroken
+// lecture time — forward in TIME_STEP steps ("ripple" shifting) until each
+// is valid again (labs are exempt, per wouldExceedBreakLimit). Every
 // rule stays hard (conflicts, lunch, the day bounds, the break limit); the
 // whole move is rolled back — nothing in state.schedule changes — if the
 // ripple can't be resolved before the day runs out. Callers should treat
@@ -775,7 +785,7 @@ export function rescheduleBlockWithCascade(blockId, newDay, newStart){
       spansLunch(cur.start, cur.duration) ||
       cur.start + cur.duration > DAY_END ||
       hasConflict(cur, cur.blockId) ||
-      wouldExceedBreakLimit(cur.sectionId, cur.facultyId, cur.day, cur.start, cur.duration, cur.blockId)
+      wouldExceedBreakLimit(cur.sectionId, cur.facultyId, cur.day, cur.start, cur.duration, cur.blockId, cur.type)
     ){
       cur.start += TIME_STEP;
       guard++;
