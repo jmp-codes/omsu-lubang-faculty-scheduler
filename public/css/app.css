@@ -1,5 +1,4 @@
-
-  :root{
+:root{
     /* --gold and --teal are tuned to Occidental Mindoro State University's
        actual seal (sampled from the logo: navy blue ~#293991, gold
        ~#ffd703) — brightened/darkened as needed to stay legible against
@@ -87,7 +86,7 @@
     outline:none;
   }
   input:focus, select:focus, textarea:focus{ border-color:var(--gold); }
-  textarea{ resize:vertical; min-height:56px; font-family:inherit; }
+  textarea{ resize:vertical; min-height:56px; font-family:inherit; width:100%; }
   .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
   .btn{
     background:var(--panel-2); border:1px solid var(--border); color:var(--text);
