@@ -3,7 +3,7 @@ import {
   assignKey, syncKey, YEAR_LABELS, DAYS, DAY_NAMES, DAY_START, DAY_END, TIME_STEP, spansLunch, hourLabel, timeRangeLabel,
   yearsInUse, downloadTextFile, toCsv, hasConflict, generateSchedule, expectedBlockIds, computeMissing,
   backupSchedule, revertSchedule, parseAdminUnits, rescheduleBlockWithCascade,
-  bootSession, requireRegistrar, loadFacultyAll, loadSubjectsAll, loadSectionsAll, loadSyncPrefAll,
+  bootSession, loadFacultyAll, loadSubjectsAll, loadSectionsAll, loadSyncPrefAll,
   loadSharedData, persistSharedData
 } from './shared.js';
 
@@ -416,7 +416,6 @@ function openEditModal(opts){
 (async function boot(){
   const ok = await bootSession('schedule');
   if(!ok) return;
-  if(!requireRegistrar()) return;
   await Promise.all([loadFacultyAll(), loadSubjectsAll(), loadSectionsAll(), loadSyncPrefAll(), loadSharedData()]);
   renderYearPrefPanel();
   renderScheduleTab();
