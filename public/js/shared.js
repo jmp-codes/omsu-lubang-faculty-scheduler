@@ -192,12 +192,14 @@ export async function saveSections(){ await apiFetch('/api/sections'+deptQS(), {
 export async function loadSyncPref(){ state.syncPref = await apiFetch('/api/sync-pref'+deptQS()); }
 export async function saveSyncPref(){ await apiFetch('/api/sync-pref'+deptQS(), {method:'PUT', body: JSON.stringify(state.syncPref)}); }
 
-// "All" loaders: READ-ONLY aggregate across every department. For a chair
-// this is identical to their own department's data (the server ignores
-// scope=all for a chair); for the registrar it merges BSIT+BSBA-OM+BEEd.
-// Used by Home (counts) and the registrar-only Assign/Schedule pages, which
-// need to see every department's sections/subjects/faculty at once but
-// never write these resources back.
+// "All" loaders: READ-ONLY aggregate across every department, available
+// to both the registrar and a chair (the server honors scope=all for any
+// authorized account — see src/lib/dept-resource.js). Used by Home
+// (counts) and the shared Rooms/Assign/Schedule pages, which need to see
+// every department's sections/subjects/faculty at once but never write
+// these resources back — a chair generating a schedule still sees and
+// schedules every department, exactly like the registrar, so Generate
+// Schedule never silently drops another department's classes.
 export async function loadFacultyAll(){ state.faculty = await apiFetch('/api/faculty?scope=all'); }
 export async function loadSubjectsAll(){ state.subjects = await apiFetch('/api/subjects?scope=all'); }
 export async function loadSectionsAll(){ state.sections = await apiFetch('/api/sections?scope=all'); }
@@ -909,9 +911,9 @@ const NAV_ITEMS = [
   {key:'faculty', href:'faculty.html', label:'Faculty', roles:['registrar','chair']},
   {key:'subjects', href:'subjects.html', label:'Subjects', roles:['registrar','chair']},
   {key:'sections', href:'sections.html', label:'Sections', roles:['registrar','chair']},
-  {key:'rooms', href:'rooms.html', label:'Rooms', roles:['registrar']},
-  {key:'assign', href:'assign.html', label:'Assign Instructors', roles:['registrar']},
-  {key:'schedule', href:'schedule.html', label:'Generate Schedule', roles:['registrar']},
+  {key:'rooms', href:'rooms.html', label:'Rooms', roles:['registrar','chair']},
+  {key:'assign', href:'assign.html', label:'Assign Instructors', roles:['registrar','chair']},
+  {key:'schedule', href:'schedule.html', label:'Generate Schedule', roles:['registrar','chair']},
   {key:'users', href:'users.html', label:'Users', roles:['registrar']}
 ];
 
@@ -1050,8 +1052,11 @@ export async function bootSession(activeKey){
   return true;
 }
 
-// For pages that only the registrar may use (Rooms / Assign / Schedule / Users).
-// Shows a blocking message and returns false for a chair.
+// For the one page that only the registrar may use (Users — account
+// management). Rooms / Assign Instructors / Generate Schedule are shared
+// pages both the registrar and any department chair may use now, so they
+// no longer call this. Shows a blocking message and returns false for
+// anyone who isn't the registrar.
 export function requireRegistrar(){
   if(session.isRegistrar) return true;
   document.querySelectorAll('main').forEach(m=>{
