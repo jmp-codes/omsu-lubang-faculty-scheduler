@@ -1,9 +1,12 @@
-// Registrar-only bundle: rooms, instructor assignments, the generated
-// schedule, year-level time preferences, and the one-level undo backup.
-// Kept as a single JSON blob since the client already treats these as one
-// unit. (syncPref is intentionally NOT part of this bundle — it's
+// Shared bundle: rooms, instructor assignments, the generated schedule,
+// year-level time preferences, and the one-level undo backup. Available to
+// BOTH the registrar and every department chair (Program Chair) — Rooms,
+// Assign Instructors, and Generate Schedule are shared pages either role
+// can use; only account management (Users) stays registrar-only. Kept as
+// a single JSON blob since the client already treats these as one unit.
+// (syncPref is intentionally NOT part of this bundle — it's
 // department-scoped and served by /api/sync-pref instead, since it's set
-// from the chair-editable Sections page, not the registrar's pages.)
+// from the chair-editable Sections page, not these shared pages.)
 import { getRequester } from "../lib/auth.js";
 import { json, unauthorized, forbidden } from "../lib/kv.js";
 
@@ -24,8 +27,8 @@ export async function onRequestGet(context) {
   try {
     const requester = await getRequester(request, env);
     if (!requester) return unauthorized();
-    if (!requester.isRegistrar) {
-      return forbidden("Only the registrar account can view or change Rooms, Assign Instructors, or the generated Schedule.");
+    if (!requester.authorized) {
+      return forbidden("Your account isn't tagged with a department or the registrar role yet. Ask the registrar to fix your account's role on the Users page.");
     }
     const raw = await env.FACULTY_KV.get(KEY, { type: "json" });
     return json(200, raw && typeof raw === "object" ? Object.assign({}, DEFAULT_SHARED, raw) : DEFAULT_SHARED);
@@ -39,8 +42,8 @@ export async function onRequestPut(context) {
   try {
     const requester = await getRequester(request, env);
     if (!requester) return unauthorized();
-    if (!requester.isRegistrar) {
-      return forbidden("Only the registrar account can view or change Rooms, Assign Instructors, or the generated Schedule.");
+    if (!requester.authorized) {
+      return forbidden("Your account isn't tagged with a department or the registrar role yet. Ask the registrar to fix your account's role on the Users page.");
     }
     let payload;
     try {
