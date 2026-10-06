@@ -4,7 +4,13 @@
 //
 // GET  -> registrar gets every department's data merged into one array/object
 //         (?scope=all), or one department's data (?department=...); a chair
-//         always gets only their own department's data.
+//         always gets only their own department's data UNLESS they also
+//         pass ?scope=all, which (like the registrar) returns the
+//         read-only merged view across every department — Rooms, Assign
+//         Instructors, and Generate Schedule are shared pages a chair can
+//         also use now, and the scheduling engine needs to see every
+//         department's sections/subjects/faculty at once or it would wipe
+//         out every other department's already-placed schedule blocks.
 // PUT  -> body is the full replacement value for ONE department. A chair
 //         may only replace their own department (forced from their login,
 //         ignoring anything in the request); the registrar must pass
@@ -28,23 +34,27 @@ export function makeDeptResource(resource, { shape = "array" } = {}) {
       const url = new URL(request.url);
       const scope = url.searchParams.get("scope");
 
-      if (requester.isRegistrar) {
-        if (scope === "all") {
-          if (shape === "array") {
-            const all = [];
-            for (const dept of DEPARTMENTS) {
-              const raw = await getJSON(kv, keyFor(resource, dept), []);
-              if (Array.isArray(raw)) all.push(...raw);
-            }
-            return json(200, all);
-          }
-          const merged = {};
+      // scope=all is a READ-ONLY aggregate across every department,
+      // available to ANY authorized account (registrar or chair) — see the
+      // note above.
+      if (scope === "all") {
+        if (shape === "array") {
+          const all = [];
           for (const dept of DEPARTMENTS) {
-            const raw = await getJSON(kv, keyFor(resource, dept), {});
-            if (raw && typeof raw === "object") Object.assign(merged, raw);
+            const raw = await getJSON(kv, keyFor(resource, dept), []);
+            if (Array.isArray(raw)) all.push(...raw);
           }
-          return json(200, merged);
+          return json(200, all);
         }
+        const merged = {};
+        for (const dept of DEPARTMENTS) {
+          const raw = await getJSON(kv, keyFor(resource, dept), {});
+          if (raw && typeof raw === "object") Object.assign(merged, raw);
+        }
+        return json(200, merged);
+      }
+
+      if (requester.isRegistrar) {
         const dept = url.searchParams.get("department");
         if (!dept || !DEPARTMENTS.includes(dept)) {
           return json(400, { error: "Registrar reads must include ?department=BSIT|BSBA-OM|BEEd or ?scope=all" });
