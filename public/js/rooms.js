@@ -1,6 +1,6 @@
 import {
   state, uid, el, escapeHtml, roomById, sectionById, parseDelimitedText,
-  bootSession, requireRegistrar, loadSharedData, loadSectionsAll, persistSharedData
+  bootSession, loadSharedData, loadSectionsAll, persistSharedData
 } from './shared.js';
 
 let editingRoomId = null;
@@ -129,7 +129,6 @@ document.getElementById('roomBulkImportBtn').addEventListener('click', function(
 (async function boot(){
   const ok = await bootSession('rooms');
   if(!ok) return;
-  if(!requireRegistrar()) return;
   // Sections (from every department) are needed here so a lecture room's
   // home-section picker can list them and show their names/departments.
   await Promise.all([loadSharedData(), loadSectionsAll()]);
