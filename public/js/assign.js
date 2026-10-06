@@ -1,6 +1,6 @@
 import {
   state, el, escapeHtml, assignKey, YEAR_LABELS,
-  bootSession, requireRegistrar, loadFacultyAll, loadSubjectsAll, loadSectionsAll,
+  bootSession, loadFacultyAll, loadSubjectsAll, loadSectionsAll,
   loadSharedData, persistSharedData
 } from './shared.js';
 
@@ -90,7 +90,6 @@ document.getElementById('assignGroups').addEventListener('change', function(e){
 (async function boot(){
   const ok = await bootSession('assign');
   if(!ok) return;
-  if(!requireRegistrar()) return;
   await Promise.all([loadFacultyAll(), loadSubjectsAll(), loadSectionsAll(), loadSharedData()]);
   renderAssignTab();
 })();
