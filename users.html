@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Faculty Scheduler — Users</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<div id="chromeHeader"></div>
+<div id="chromeNav"></div>
+
+<main>
+  <div class="card">
+    <h2 id="userFormTitle">Add Account</h2>
+    <div class="hint">Creates a sign-in for a registrar or a department chair. There's no email sent — share the password with them directly.</div>
+    <div class="form-grid">
+      <div class="field"><label>Email</label><input type="email" id="userEmail" placeholder="e.g. chair.bsit@omsu.edu.ph" autocomplete="off"></div>
+      <div class="field"><label>Password</label><input type="password" id="userPassword" placeholder="At least 8 characters" autocomplete="new-password"></div>
+      <div class="field"><label>Role</label>
+        <select id="userRole">
+          <option value="registrar">Registrar</option>
+          <option value="chair-BSIT">BSIT Program Chair</option>
+          <option value="chair-BSBA-OM">BSBA-OM Program Chair</option>
+          <option value="chair-BEEd">BEEd Program Chair</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <button class="btn btn-primary" id="userSaveBtn">Create Account</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Accounts</h2>
+    <table>
+      <thead><tr><th style="width:50%">Email</th><th style="width:30%">Role</th><th style="width:20%">Actions</th></tr></thead>
+      <tbody id="usersTableBody"></tbody>
+    </table>
+    <div id="usersEmpty" class="empty-msg hidden">No accounts yet.</div>
+  </div>
+</main>
+
+<div id="chromeFooter"></div>
+
+<script type="module" src="js/users.js"></script>
+</body>
+</html>

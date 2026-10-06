@@ -1,0 +1,11 @@
+name = "omsu-lubang-faculty-scheduler"
+main = "src/index.js"
+compatibility_date = "2026-01-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[[kv_namespaces]]
+binding = "FACULTY_KV"
+id = "380779e29138491bbf759be46afe9e9e"

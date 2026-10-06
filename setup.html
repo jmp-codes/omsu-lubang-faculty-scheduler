@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Faculty Scheduler — First-Time Setup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<div style="min-height:100vh; display:flex; align-items:center; justify-content:center;">
+  <form id="setupForm" class="card" style="width:100%; max-width:420px; padding:28px;">
+    <h2 style="margin-top:0;">First-Time Setup</h2>
+    <div class="hint">This creates the very first Registrar account. It only works once — as soon as any account exists, this page stops working, so it's safe to leave on the live site.</div>
+    <div id="setupError" class="warn-box" style="display:none; margin:12px 0;"></div>
+    <div id="setupSuccess" class="hint" style="display:none; margin:12px 0; color:var(--teal);"></div>
+    <label class="muted" style="font-size:12px;">Registrar Email</label>
+    <input type="email" id="setupEmail" required style="width:100%; margin:4px 0 14px;">
+    <label class="muted" style="font-size:12px;">Password (at least 8 characters)</label>
+    <input type="password" id="setupPassword" required minlength="8" style="width:100%; margin:4px 0 18px;">
+    <button type="submit" class="btn btn-primary" style="width:100%;" id="setupSubmitBtn">Create Registrar Account</button>
+  </form>
+</div>
+
+<script>
+document.getElementById('setupForm').addEventListener('submit', async function(e){
+  e.preventDefault();
+  const errEl = document.getElementById('setupError');
+  const okEl = document.getElementById('setupSuccess');
+  const btn = document.getElementById('setupSubmitBtn');
+  errEl.style.display = 'none';
+  okEl.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = 'Creating…';
+  try{
+    const res = await fetch('/api/setup', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        email: document.getElementById('setupEmail').value.trim(),
+        password: document.getElementById('setupPassword').value
+      })
+    });
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok) throw new Error(data.error || 'Setup failed.');
+    okEl.textContent = 'Registrar account created. You can now go to the homepage and log in.';
+    okEl.style.display = '';
+    document.getElementById('setupForm').reset();
+    btn.textContent = 'Done';
+  }catch(err){
+    errEl.textContent = err.message || 'Setup failed.';
+    errEl.style.display = '';
+    btn.disabled = false;
+    btn.textContent = 'Create Registrar Account';
+  }
+});
+</script>
+</body>
+</html>
