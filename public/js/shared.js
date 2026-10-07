@@ -248,6 +248,33 @@ export function el(html){
 export function escapeHtml(s){
   return String(s==null?"":s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
+// Lightweight, non-blocking notification — replaces alert() for routine
+// confirmations/validation (import counts, "please enter a name", etc.)
+// that don't need the user to dismiss a dialog before continuing. Lazily
+// creates its own fixed-position container the first time it's called, so
+// no page's HTML needs a mount point for this. `type` is 'info' (default),
+// 'success', or 'error' — purely cosmetic (left border color); nothing here
+// is a substitute for confirm() on a destructive action, which should keep
+// blocking the user as before.
+export function toast(message, type, duration){
+  type = type || 'info';
+  duration = duration || 3500;
+  let root = document.getElementById('toastRoot');
+  if(!root){
+    root = document.createElement('div');
+    root.id = 'toastRoot';
+    root.className = 'toast-root';
+    document.body.appendChild(root);
+  }
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  t.textContent = message;
+  root.appendChild(t);
+  setTimeout(function(){
+    t.style.opacity = '0';
+    setTimeout(function(){ t.remove(); }, 200);
+  }, duration);
+}
 export function hourLabel(h){
   const hh = Math.floor(h);
   const period = hh < 12 ? "AM" : "PM";
