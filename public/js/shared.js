@@ -28,7 +28,7 @@ export function defaultState(){
   return {
     faculty: [],     // {id,name,rank,qualifications:[],designations:[],externalBusy:[{id,day,start,duration,label}],department}
     subjects: [],    // {id,code,name,year,units,type,lecHours,labHours,department,semester,curriculum,archived,preferSaturday,oneMeeting}
-    rooms: [],       // {id,name,type,capacity,homeSectionIds:[]} — shared/registrar-owned; homeSectionIds only meaningful for type==='lecture'
+    rooms: [],       // {id,name,type,capacity,homeSectionIds:[],department} — department is null/undefined for a Shared/Any-Department room (visible & usable by everyone, editable only by the registrar), or one of DEPARTMENTS for a department-owned room (visible to everyone for coordination, but only editable by that department's chair or the registrar); homeSectionIds only meaningful for type==='lecture'
     sections: [],    // {id,name,year,studentCount,subjectIds:[],department}
     assignments: {}, // `${sectionId}::${subjectId}` -> facultyId — shared/registrar-owned
     syncPref: {},    // `${year}::${subjectId}` -> true/false — department-owned
@@ -211,6 +211,13 @@ export async function saveSyncPref(){ await apiFetch('/api/sync-pref'+deptQS(), 
 // schedules every department, exactly like the registrar, so Generate
 // Schedule never silently drops another department's classes.
 export async function loadFacultyAll(){ state.faculty = await apiFetch('/api/faculty?scope=all'); }
+
+// Same read as loadFacultyAll (every department's full faculty records,
+// available to a chair too — see dept-resource.js), but does NOT touch
+// state.faculty. Used by the Faculty page's "Link a Shared Instructor"
+// search, which needs to look across every department without clobbering
+// the department-scoped list (state.faculty) that page is editing.
+export async function fetchFacultyAll(){ return apiFetch('/api/faculty?scope=all'); }
 export async function loadSubjectsAll(){ state.subjects = await apiFetch('/api/subjects?scope=all'); }
 export async function loadSectionsAll(){ state.sections = await apiFetch('/api/sections?scope=all'); }
 export async function loadSyncPrefAll(){ state.syncPref = await apiFetch('/api/sync-pref?scope=all'); }
@@ -525,7 +532,12 @@ function homeRoomIdsFor(sec){
 // the next candidate here, so the class still gets scheduled rather than
 // being stuck waiting on one specific room.
 function roomCandidatesFor(segType, sec){
-  const candidates = state.rooms.filter(r=>r.type===segType && (!r.capacity || r.capacity>=sec.studentCount));
+  // A department-owned room (room.department set) is only a candidate for
+  // that same department's sections — this is what actually keeps Generate
+  // Schedule from ever placing one department's class in another
+  // department's dedicated room. A Shared/Any-Department room (no
+  // department set) remains a candidate for every section, same as before.
+  const candidates = state.rooms.filter(r=>r.type===segType && (!r.capacity || r.capacity>=sec.studentCount) && (!r.department || r.department===sec.department));
   if(segType === 'lecture'){
     const homeIds = new Set(homeRoomIdsFor(sec));
     if(homeIds.size){
