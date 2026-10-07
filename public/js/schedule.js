@@ -390,7 +390,16 @@ function openEditModal(opts){
     const conflict = hasConflict(testBlock, excludeId);
     if(conflict){
       if(conflict.type==='availability'){
-        msgBox.textContent = `${facultyName(facultyId)} isn't available until ${hourLabel(conflict.with.start)} on ${DAY_NAMES[newDay]}.`;
+        const reason = conflict.with.reason;
+        if(reason==='day'){
+          msgBox.textContent = `${facultyName(facultyId)} isn't available on ${DAY_NAMES[conflict.with.day]}.`;
+        } else if(reason==='morning'){
+          msgBox.textContent = `${facultyName(facultyId)} is mornings-only and must be done by ${hourLabel(conflict.with.time)} on ${DAY_NAMES[newDay]}.`;
+        } else if(reason==='evening'){
+          msgBox.textContent = `${facultyName(facultyId)} isn't available until ${hourLabel(conflict.with.time)} on ${DAY_NAMES[newDay]}.`;
+        } else {
+          msgBox.textContent = `${facultyName(facultyId)} isn't available on ${DAY_NAMES[newDay]}.`;
+        }
         msgBox.classList.remove('hidden');
         return;
       }
