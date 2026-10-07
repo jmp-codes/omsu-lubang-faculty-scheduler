@@ -389,6 +389,11 @@ function openEditModal(opts){
     const excludeId = existingBlock ? existingBlock.blockId : opts.blockId;
     const conflict = hasConflict(testBlock, excludeId);
     if(conflict){
+      if(conflict.type==='availability'){
+        msgBox.textContent = `${facultyName(facultyId)} isn't available until ${hourLabel(conflict.with.start)} on ${DAY_NAMES[newDay]}.`;
+        msgBox.classList.remove('hidden');
+        return;
+      }
       let who = conflict.type==='external' ? (conflict.with.label||'external commitment') :
         conflict.type==='faculty' ? 'the same faculty (' + facultyName(facultyId) + ')' :
         conflict.type==='room' ? 'the same room' : 'the same section';
