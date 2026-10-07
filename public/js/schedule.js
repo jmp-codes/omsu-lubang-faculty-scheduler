@@ -31,6 +31,23 @@ function myFacultyIds(){
   return new Set(state.faculty.filter(f=>f.department===session.department).map(f=>f.id));
 }
 
+// state.faculty (the full cross-department merge) can legitimately contain
+// the SAME faculty id more than once — a linked shared instructor is
+// stored as one copy per department they're linked into (see
+// faculty.js/linkInstructor), and loadFacultyAll() concatenates every
+// department's array as-is. That's correct for conflict-checking, but any
+// list that enumerates "every distinct faculty member" (Faculty Load
+// Summary, the By Faculty dropdown) needs to collapse those back down to
+// one row per person first, or a linked instructor shows up twice.
+function dedupeById(arr){
+  const seen = new Set();
+  return arr.filter(f=>{
+    if(seen.has(f.id)) return false;
+    seen.add(f.id);
+    return true;
+  });
+}
+
 // Whether a chair should see this schedule block at all (read-only
 // visibility, separate from canEditSection's edit permission above). Their
 // own department's sections are always visible; a block for a faculty
@@ -164,7 +181,7 @@ function renderFacultyLoad(){
   // state.faculty is the full cross-department merge — restrict this to
   // the viewer's own roster (native + linked) so a chair doesn't get a load
   // report on every instructor on campus, only their own.
-  const visibleFaculty = session.isRegistrar ? state.faculty : state.faculty.filter(f=>myFacultyIds().has(f.id));
+  const visibleFaculty = dedupeById(session.isRegistrar ? state.faculty : state.faculty.filter(f=>myFacultyIds().has(f.id)));
   if(visibleFaculty.length===0){ card.style.display='none'; return; }
   card.style.display='';
   tbody.innerHTML = '';
@@ -306,7 +323,7 @@ function populateFilterSelect(){
     // Same idea for faculty — only the viewer's own roster (native members
     // plus anyone they've linked in from another department).
     const myFac = myFacultyIds();
-    const visibleFaculty = session.isRegistrar ? state.faculty : state.faculty.filter(f=>myFac.has(f.id));
+    const visibleFaculty = dedupeById(session.isRegistrar ? state.faculty : state.faculty.filter(f=>myFac.has(f.id)));
     items = visibleFaculty.map(f=>({id:f.id,label:f.name}));
   }
   if(currentView==='room'){
