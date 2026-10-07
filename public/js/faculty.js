@@ -41,6 +41,47 @@ function hourOptions(){
   return opts;
 }
 
+// Per-day "earliest start" availability grid for part-time instructors with
+// another job before/after teaching hours — see earliestStart on the
+// faculty record and the matching hard rule in shared.js's hasConflict().
+// Leaving a day unchecked means no restriction that day.
+function renderAvailGrid(earliestStart){
+  const grid = document.getElementById('facAvailGrid');
+  if(!grid) return;
+  earliestStart = earliestStart || {};
+  grid.innerHTML = DAYS.map(d=>{
+    const has = earliestStart[d] !== undefined;
+    return `
+    <div class="row" style="margin-bottom:6px;">
+      <label style="min-width:50px; font-weight:600;"><input type="checkbox" class="availDayChk" data-day="${d}" ${has?'checked':''}> ${d}</label>
+      <select class="availDayTime" data-day="${d}" style="width:150px;" ${has?'':'disabled'}>${hourOptions()}</select>
+    </div>`;
+  }).join("");
+  DAYS.forEach(d=>{
+    if(earliestStart[d] !== undefined){
+      const sel = grid.querySelector(`.availDayTime[data-day="${d}"]`);
+      if(sel) sel.value = earliestStart[d];
+    }
+  });
+}
+document.getElementById('facAvailGrid').addEventListener('change', function(e){
+  if(e.target.classList.contains('availDayChk')){
+    const sel = document.querySelector(`.availDayTime[data-day="${e.target.dataset.day}"]`);
+    if(sel) sel.disabled = !e.target.checked;
+  }
+});
+function collectEarliestStart(){
+  const es = {};
+  document.querySelectorAll('#facAvailGrid .availDayChk').forEach(chk=>{
+    if(chk.checked){
+      const sel = document.querySelector(`.availDayTime[data-day="${chk.dataset.day}"]`);
+      es[chk.dataset.day] = parseFloat(sel.value);
+    }
+  });
+  return es;
+}
+renderAvailGrid({});
+
 function renderExternalPanel(facId){
   const panel = document.getElementById('extPanel_'+facId);
   if(!panel) return;
@@ -144,6 +185,7 @@ function startEditFaculty(id){
   document.getElementById('facRank').value = f.rank;
   document.getElementById('facQuals').value = (f.qualifications||[]).join("\n");
   document.getElementById('facDesigs').value = (f.designations||[]).join("\n");
+  renderAvailGrid(f.earliestStart || {});
   document.getElementById('facultyFormTitle').textContent = "Edit Faculty";
   document.getElementById('facSaveBtn').textContent = "Save Changes";
   document.getElementById('facCancelBtn').style.display = '';
@@ -155,6 +197,7 @@ function resetFacultyForm(){
   document.getElementById('facRank').value = 'Instructor I';
   document.getElementById('facQuals').value = '';
   document.getElementById('facDesigs').value = '';
+  renderAvailGrid({});
   document.getElementById('facultyFormTitle').textContent = "Add Faculty";
   document.getElementById('facSaveBtn').textContent = "Add Faculty";
   document.getElementById('facCancelBtn').style.display = 'none';
@@ -166,6 +209,7 @@ document.getElementById('facSaveBtn').addEventListener('click', async function()
   const rank = document.getElementById('facRank').value;
   const qualifications = document.getElementById('facQuals').value.split("\n").map(s=>s.trim()).filter(Boolean);
   const designations = document.getElementById('facDesigs').value.split("\n").map(s=>s.trim()).filter(Boolean);
+  const earliestStart = collectEarliestStart();
 
   if(!editingFacultyId){
     // Only worth checking when ADDING someone new — renaming an existing
@@ -187,9 +231,9 @@ document.getElementById('facSaveBtn').addEventListener('click', async function()
 
   if(editingFacultyId){
     const f = byId(state.faculty, editingFacultyId);
-    Object.assign(f, {name, rank, qualifications, designations});
+    Object.assign(f, {name, rank, qualifications, designations, earliestStart});
   } else {
-    state.faculty.push({id: uid('fac'), name, rank, qualifications, designations, externalBusy:[]});
+    state.faculty.push({id: uid('fac'), name, rank, qualifications, designations, externalBusy:[], earliestStart});
   }
   persistFaculty();
   resetFacultyForm();
