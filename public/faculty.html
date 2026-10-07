@@ -41,9 +41,19 @@
         <textarea id="facDesigs" placeholder="Program Chair — 6 units&#10;Research Coordinator — 3 units"></textarea>
       </div>
       <div class="field wide">
-        <label>Availability (for part-time instructors with another job — leave a day unchecked if they're free all day)</label>
-        <div class="hint">Check a day and set the earliest time they can start teaching that day. Generate Schedule will never place a class for them before that time on that day.</div>
-        <div id="facAvailGrid" class="avail-grid"></div>
+        <label>Availability</label>
+        <div class="hint">Most part-timers fit one of these. Generate Schedule will never place a class for them outside what you pick here.</div>
+        <select id="facAvailMode" style="max-width:280px;">
+          <option value="full">Full availability</option>
+          <option value="morning">Mornings only (before a set time)</option>
+          <option value="evening">Evenings only (after a set time)</option>
+          <option value="days">Specific days only</option>
+        </select>
+        <div id="facAvailTimeWrap" class="row" style="margin-top:8px; display:none;">
+          <label class="muted" style="font-size:12px;">Time:</label>
+          <select id="facAvailTime" style="width:150px;"></select>
+        </div>
+        <div id="facAvailDaysWrap" class="row" style="margin-top:8px; display:none;"></div>
       </div>
     </div>
     <div class="row">
