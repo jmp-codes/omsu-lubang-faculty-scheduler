@@ -69,11 +69,15 @@
   <div class="card">
     <div class="row" style="justify-content:space-between; align-items:center;">
       <h2 style="margin:0;">Subjects by Year Level</h2>
-      <label class="row" style="align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="subjShowArchived"> Show archived (old curriculum)</label>
+      <div class="row" style="flex:none;">
+        <input type="text" id="subjSearchInput" class="search-field" placeholder="Search by code or name…">
+        <label class="row" style="align-items:center; gap:6px; font-size:13px;"><input type="checkbox" id="subjShowArchived"> Show archived (old curriculum)</label>
+      </div>
     </div>
     <div class="hint">When a curriculum changes, archive the old subject instead of deleting it — sections already built with it (for continuing/irregular students) keep working, but it won't show up when adding subjects to new sections.</div>
     <div id="subjectsGroups"></div>
     <div id="subjectsEmpty" class="empty-msg hidden">No subjects added yet.</div>
+    <div id="subjectsSearchEmpty" class="empty-msg hidden">No subjects match that search.</div>
   </div>
 </main>
 
