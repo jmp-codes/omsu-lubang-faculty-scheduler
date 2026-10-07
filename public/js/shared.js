@@ -259,18 +259,18 @@ export function timeRangeLabel(start,duration){ return hourLabel(start) + " – 
 export function byId(arr,id){ return arr.find(x=>x.id===id); }
 export function facultyName(id){ const f = byId(state.faculty,id); return f? f.name : "(unassigned)"; }
 // Short human label for a part-time instructor's standing availability
-// (set via earliestStart on the Faculty page), e.g. "after 5:00 PM (Mon,
-// Tue, Wed, Thu, Fri)" — used in the Assign Instructors dropdown and the
-// Faculty list so a chair can see the constraint before trying to place
-// them, rather than finding out only after Generate Schedule fails.
+// (set via the single "Availability" dropdown on the Faculty page — see
+// f.availability = {mode, time, days}). Used in the Assign Instructors
+// dropdown and the Faculty list so a chair can see the constraint before
+// trying to place them, rather than finding out only after Generate
+// Schedule fails.
 export function describeAvailability(f){
-  const es = f && f.earliestStart;
-  if(!es) return '';
-  const days = DAYS.filter(d=> es[d]!==undefined);
-  if(days.length===0) return '';
-  const times = [...new Set(days.map(d=>es[d]))];
-  const whenLabel = times.length===1 ? 'after '+hourLabel(times[0]) : 'limited hours';
-  return whenLabel + ' (' + days.join(', ') + ')';
+  const a = f && f.availability;
+  if(!a || !a.mode || a.mode==='full') return '';
+  if(a.mode==='morning') return 'mornings only, before ' + hourLabel(a.time);
+  if(a.mode==='evening') return 'evenings only, after ' + hourLabel(a.time);
+  if(a.mode==='days') return (a.days||[]).join(', ') + ' only';
+  return '';
 }
 export function subjectById(id){ return byId(state.subjects,id); }
 export function roomById(id){ return byId(state.rooms,id); }
@@ -353,13 +353,21 @@ export function hasConflict(block, excludeBlockId){
           return {type:'external', with:ext};
         }
       }
-      // Hard availability rule: a part-time instructor with a day-job
-      // cutoff can never be scheduled before that time on that day, no
-      // matter how good the fit otherwise looks — same "no exceptions"
-      // treatment as the lunch rule, not a soft preference.
-      const cutoff = fac.earliestStart && fac.earliestStart[block.day];
-      if(cutoff !== undefined && block.start < cutoff){
-        return {type:'availability', with:{start:cutoff, duration:0, label:'not available until '+hourLabel(cutoff)}};
+      // Hard availability rule, set via the single "Availability" dropdown
+      // on the Faculty page (f.availability = {mode, time, days}) — same
+      // "no exceptions" treatment as the lunch rule, never a soft
+      // preference that falls back if it's inconvenient.
+      const avail = fac.availability;
+      if(avail && avail.mode && avail.mode!=='full'){
+        if(avail.mode==='days' && !(avail.days||[]).includes(block.day)){
+          return {type:'availability', with:{reason:'day', day:block.day}};
+        }
+        if(avail.mode==='morning' && block.start + block.duration > avail.time){
+          return {type:'availability', with:{reason:'morning', time:avail.time}};
+        }
+        if(avail.mode==='evening' && block.start < avail.time){
+          return {type:'availability', with:{reason:'evening', time:avail.time}};
+        }
       }
     }
   }
