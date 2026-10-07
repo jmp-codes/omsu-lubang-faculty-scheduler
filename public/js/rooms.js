@@ -1,15 +1,20 @@
 import {
   state, uid, el, escapeHtml, roomById, sectionById, parseDelimitedText,
-  bootSession, loadSharedData, loadSectionsAll, persistSharedData
+  bootSession, loadSharedData, loadSectionsAll, persistSharedData, toast
 } from './shared.js';
 
 let editingRoomId = null;
+let roomSearchQuery = '';
 
 function renderRoomsTable(){
   const tbody = document.getElementById('roomsTableBody');
   tbody.innerHTML = "";
   document.getElementById('roomsEmpty').classList.toggle('hidden', state.rooms.length>0);
-  state.rooms.forEach(r=>{
+  const q = roomSearchQuery.trim().toLowerCase();
+  const visibleRooms = state.rooms.filter(r=> !q || r.name.toLowerCase().includes(q));
+  const searchEmpty = document.getElementById('roomsSearchEmpty');
+  if(searchEmpty) searchEmpty.classList.toggle('hidden', !(q && visibleRooms.length===0 && state.rooms.length>0));
+  visibleRooms.forEach(r=>{
     const tr = el(`<tr>
       <td><strong>${escapeHtml(r.name)}</strong></td>
       <td><span class="badge ${r.type==='lab'?'badge-lab':'badge-lecture'}">${r.type==='lab'?'Laboratory':'Lecture Room'}</span></td>
@@ -42,6 +47,11 @@ function renderRoomsTable(){
     }
   });
 }
+document.getElementById('roomSearchInput').addEventListener('input', function(e){
+  roomSearchQuery = e.target.value;
+  renderRoomsTable();
+});
+
 document.getElementById('roomsTableBody').addEventListener('click', function(e){
   const editBtn = e.target.closest('.editRoom');
   const delBtn = e.target.closest('.delRoom');
@@ -94,7 +104,7 @@ function resetRoomForm(){
 document.getElementById('roomCancelBtn').addEventListener('click', resetRoomForm);
 document.getElementById('roomSaveBtn').addEventListener('click', function(){
   const name = document.getElementById('roomName').value.trim();
-  if(!name){ alert("Please enter a room name."); return; }
+  if(!name){ toast("Please enter a room name.", 'error'); return; }
   const type = document.getElementById('roomType').value;
   const capacity = parseInt(document.getElementById('roomCapacity').value,10) || 0;
   if(editingRoomId){
@@ -109,7 +119,7 @@ document.getElementById('roomSaveBtn').addEventListener('click', function(){
 
 document.getElementById('roomBulkImportBtn').addEventListener('click', function(){
   const text = document.getElementById('roomBulkText').value;
-  if(!text.trim()){ alert("Paste some rows first."); return; }
+  if(!text.trim()){ toast("Paste some rows first.", 'error'); return; }
   const rows = parseDelimitedText(text);
   let count = 0;
   rows.forEach(cols=>{
@@ -123,7 +133,7 @@ document.getElementById('roomBulkImportBtn').addEventListener('click', function(
   persistSharedData();
   document.getElementById('roomBulkText').value = '';
   renderRoomsTable();
-  alert(count + " room" + (count===1?"":"s") + " imported.");
+  toast(count + " room" + (count===1?"":"s") + " imported.", 'success');
 });
 
 (async function boot(){
