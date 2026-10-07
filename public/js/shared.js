@@ -37,7 +37,17 @@ export function defaultState(){
     manualRemoved: {}, // blockId -> true — shared/registrar-owned
     previousSchedule: [],      // one-level undo backup — shared/registrar-owned
     previousManualRemoved: {},
-    hasScheduleBackup: false
+    hasScheduleBackup: false,
+    // One-level undo backup, scoped per department — { [department]: {
+    // schedule: Block[], manualRemovedKeys: string[] } }. A chair's own
+    // Generate/Clear/Revert only ever reads/writes their own entry here, so
+    // it can never touch another department's already-placed schedule, and
+    // two chairs acting back-to-back never clobber each other's undo. The
+    // registrar's previousSchedule/previousManualRemoved/hasScheduleBackup
+    // above stay a single whole-campus snapshot, unchanged, for their own
+    // whole-schedule actions. See backupSchedule/revertSchedule/
+    // generateSchedule/clearSchedule below.
+    deptScheduleBackups: {}
   };
 }
 
@@ -224,7 +234,8 @@ export async function saveSharedData(){
     rooms: state.rooms, assignments: state.assignments, yearPref: state.yearPref,
     schedule: state.schedule, manualRemoved: state.manualRemoved,
     previousSchedule: state.previousSchedule, previousManualRemoved: state.previousManualRemoved,
-    hasScheduleBackup: state.hasScheduleBackup
+    hasScheduleBackup: state.hasScheduleBackup,
+    deptScheduleBackups: state.deptScheduleBackups
   };
   await apiFetch('/api/shared-data', {method:'PUT', body: JSON.stringify(payload)});
 }
@@ -862,28 +873,102 @@ export function rescheduleBlockWithCascade(blockId, newDay, newStart){
   return {ok:true, shifted};
 }
 
-export function backupSchedule(){
-  state.previousSchedule = state.schedule.slice();
-  state.previousManualRemoved = Object.assign({}, state.manualRemoved);
-  state.hasScheduleBackup = true;
+// Department of the section a schedule block (or a manualRemoved blockId)
+// belongs to — null if the section no longer exists. blockId is always
+// `${sectionId}::${subjectId}::${segType}` (see segmentBlockId), so the
+// section id is just its first `::`-delimited part.
+function blockSectionDept(block){
+  const sec = sectionById(block.sectionId);
+  return sec ? sec.department : null;
 }
-export function revertSchedule(){
-  const curSchedule = state.schedule;
-  const curManualRemoved = state.manualRemoved;
-  state.schedule = state.previousSchedule;
-  state.manualRemoved = state.previousManualRemoved;
-  state.previousSchedule = curSchedule;
-  state.previousManualRemoved = curManualRemoved;
+function blockIdSectionDept(blockId){
+  const sec = sectionById(blockId.split('::')[0]);
+  return sec ? sec.department : null;
+}
+
+// deptScope is a department string to scope this call to (a chair acting
+// only on their own department), or omitted/null for the registrar's
+// whole-campus action — every function below keeps that same meaning.
+export function backupSchedule(deptScope){
+  if(!deptScope){
+    state.previousSchedule = state.schedule.slice();
+    state.previousManualRemoved = Object.assign({}, state.manualRemoved);
+    state.hasScheduleBackup = true;
+    return;
+  }
+  // Snapshot ONLY this department's own rows, keyed separately per
+  // department so two chairs generating back-to-back never clobber each
+  // other's undo, and Revert can never touch anyone else's schedule.
+  state.deptScheduleBackups = state.deptScheduleBackups || {};
+  state.deptScheduleBackups[deptScope] = {
+    schedule: state.schedule.filter(b=> blockSectionDept(b)===deptScope),
+    manualRemovedKeys: Object.keys(state.manualRemoved).filter(k=> blockIdSectionDept(k)===deptScope)
+  };
+}
+export function hasDeptScheduleBackup(deptScope){
+  return !!(deptScope && state.deptScheduleBackups && state.deptScheduleBackups[deptScope]);
+}
+export function revertSchedule(deptScope){
+  if(!deptScope){
+    const curSchedule = state.schedule;
+    const curManualRemoved = state.manualRemoved;
+    state.schedule = state.previousSchedule;
+    state.manualRemoved = state.previousManualRemoved;
+    state.previousSchedule = curSchedule;
+    state.previousManualRemoved = curManualRemoved;
+    persistSharedData();
+    return;
+  }
+  const backups = state.deptScheduleBackups || {};
+  const backup = backups[deptScope];
+  if(!backup) return;
+  // Pull this department's CURRENT rows/keys out first (becoming the new
+  // backup, so Revert stays a one-level toggle), then splice the backup's
+  // rows back in — every other department's rows/keys are never touched.
+  const curDeptSchedule = state.schedule.filter(b=> blockSectionDept(b)===deptScope);
+  const keepManual = {};
+  const curDeptManualKeys = [];
+  Object.keys(state.manualRemoved).forEach(k=>{
+    if(blockIdSectionDept(k)===deptScope) curDeptManualKeys.push(k);
+    else keepManual[k] = true;
+  });
+  backup.manualRemovedKeys.forEach(k=> keepManual[k] = true);
+
+  state.schedule = state.schedule.filter(b=> blockSectionDept(b)!==deptScope).concat(backup.schedule);
+  state.manualRemoved = keepManual;
+  backups[deptScope] = { schedule: curDeptSchedule, manualRemovedKeys: curDeptManualKeys };
+  state.deptScheduleBackups = backups;
+  persistSharedData();
+}
+// Clears the generated schedule — every department's, for the registrar,
+// or only deptScope's own rows for a chair, leaving every other
+// department's already-placed blocks exactly where they are.
+export function clearSchedule(deptScope){
+  backupSchedule(deptScope);
+  if(deptScope){
+    state.schedule = state.schedule.filter(b=> blockSectionDept(b)!==deptScope);
+    Object.keys(state.manualRemoved).forEach(k=>{
+      if(blockIdSectionDept(k)===deptScope) delete state.manualRemoved[k];
+    });
+  } else {
+    state.schedule = [];
+    state.manualRemoved = {};
+  }
   persistSharedData();
 }
 
-export function generateSchedule(){
-  backupSchedule();
-  state.schedule = [];
+export function generateSchedule(deptScope){
+  backupSchedule(deptScope);
+  if(deptScope){
+    state.schedule = state.schedule.filter(b=> blockSectionDept(b)!==deptScope);
+  } else {
+    state.schedule = [];
+  }
   const warnings = [];
 
+  const scopedSections = deptScope ? state.sections.filter(sec=>sec.department===deptScope) : state.sections;
   const syncGroups = {};
-  state.sections.forEach(sec=>{
+  scopedSections.forEach(sec=>{
     sec.subjectIds.forEach(subjId=>{
       const key = syncKey(sec.year, subjId);
       (syncGroups[key] = syncGroups[key]||{year:sec.year, subjectId:subjId, sections:[]}).sections.push(sec);
@@ -897,7 +982,8 @@ export function generateSchedule(){
     }
   });
 
-  const offerings = buildOfferings().filter(o=>!handledOfferings.has(assignKey(o.section.id,o.subject.id)));
+  let offerings = buildOfferings().filter(o=>!handledOfferings.has(assignKey(o.section.id,o.subject.id)));
+  if(deptScope) offerings = offerings.filter(o=> o.section.department===deptScope);
   offerings.sort((a,b)=> b.totalHours - a.totalHours);
   offerings.forEach(o=>{
     if(!o.facultyId){
@@ -910,7 +996,13 @@ export function generateSchedule(){
     });
   });
 
-  state.manualRemoved = {};
+  if(deptScope){
+    Object.keys(state.manualRemoved).forEach(k=>{
+      if(blockIdSectionDept(k)===deptScope) delete state.manualRemoved[k];
+    });
+  } else {
+    state.manualRemoved = {};
+  }
   persistSharedData();
   return warnings;
 }
