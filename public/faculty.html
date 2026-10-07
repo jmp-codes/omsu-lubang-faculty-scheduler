@@ -40,6 +40,11 @@
       <div class="field wide"><label>Designation w/ Equivalent Units (one per line)</label>
         <textarea id="facDesigs" placeholder="Program Chair — 6 units&#10;Research Coordinator — 3 units"></textarea>
       </div>
+      <div class="field wide">
+        <label>Availability (for part-time instructors with another job — leave a day unchecked if they're free all day)</label>
+        <div class="hint">Check a day and set the earliest time they can start teaching that day. Generate Schedule will never place a class for them before that time on that day.</div>
+        <div id="facAvailGrid" class="avail-grid"></div>
+      </div>
     </div>
     <div class="row">
       <button class="btn btn-primary" id="facSaveBtn">Add Faculty</button>
