@@ -3,6 +3,24 @@ import {
   bootSession, loadFacultyAll, loadSubjectsAll, loadSectionsAll, loadSharedData
 } from './shared.js';
 
+// Only the registrar/chair-shared pages (Rooms/Assign/Schedule) load
+// state.schedule at all — see boot() below — so this banner only makes
+// sense, and is only shown, for a registrar. A chair without
+// session.isRegistrar never has state.schedule populated here, so there's
+// nothing reliable to warn them about from this page.
+function renderStatusBanner(){
+  const mount = document.getElementById('homeStatusBanner');
+  if(!mount) return;
+  if(!session.isRegistrar){ mount.innerHTML = ''; return; }
+  if(state.schedule.length === 0){ mount.innerHTML = ''; return; }
+  const missing = computeMissing().length;
+  if(missing === 0){ mount.innerHTML = ''; return; }
+  mount.innerHTML = `<div class="warn-box">
+    <strong>${missing} session${missing===1?'':'s'} still unscheduled.</strong>
+    Head to <a href="schedule.html" style="color:#ffd7dc; text-decoration:underline;">Generate Schedule</a> to place ${missing===1?'it':'them'} manually.
+  </div>`;
+}
+
 function renderCards(){
   const grid = document.getElementById('homeGrid');
   const cards = [
@@ -33,5 +51,6 @@ function renderCards(){
   await loadSubjectsAll();
   await loadSectionsAll();
   if(session.isRegistrar) await loadSharedData();
+  renderStatusBanner();
   renderCards();
 })();
