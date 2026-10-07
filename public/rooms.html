@@ -23,8 +23,11 @@
         <select id="roomType"><option value="lecture">Lecture Room</option><option value="lab">Laboratory</option></select>
       </div>
       <div class="field"><label>Maximum Students</label><input type="number" id="roomCapacity" min="0" placeholder="e.g. 40"></div>
+      <div class="field" id="roomDeptField" style="display:none;"><label>Department</label>
+        <select id="roomDept"></select>
+      </div>
     </div>
-    <div class="hint">Leaving Maximum Students blank means "no limit" — the schedule generator will place a section of any size there. Enter a number to actually cap it.</div>
+    <div class="hint">Leaving Maximum Students blank means "no limit" — the schedule generator will place a section of any size there. Enter a number to actually cap it. A room set to a specific department is only usable for that department's classes and only editable by that department's chair (or the registrar) — pick "Shared / Any Department" for a room every department may use.</div>
     <div class="row">
       <button class="btn btn-primary" id="roomSaveBtn">Add Room</button>
       <button class="btn" id="roomCancelBtn" style="display:none;">Cancel Edit</button>
@@ -33,7 +36,7 @@
 
   <div class="card">
     <h2>Bulk Import Rooms</h2>
-    <div class="hint">One room per line: <strong>Name, Type (lecture/lab), Maximum Students</strong>. Tab- or comma-separated.</div>
+    <div class="hint">One room per line: <strong>Name, Type (lecture/lab), Maximum Students</strong>, plus an optional 4th column for the registrar — <strong>Department</strong> (BSIT/BSBA-OM/BEEd; leave blank for Shared). A chair's imported rooms always land in their own department regardless of that column. Tab- or comma-separated.</div>
     <textarea id="roomBulkText" rows="4" placeholder="Room 101, lecture, 40&#10;Lab 1, lab, 30"></textarea>
     <div class="row" style="margin-top:10px;">
       <button class="btn btn-teal" id="roomBulkImportBtn">Import Rows</button>
@@ -47,7 +50,7 @@
     </div>
     <div class="hint">For each lecture room, you can assign "home sections" — those sections' lecture classes are scheduled there first. If the room isn't free at a given time, the generator still schedules the class, just in another lecture room. Laboratory rooms don't have home sections — every section shares whichever lab room fits the subject.</div>
     <table>
-      <thead><tr><th>Name</th><th>Type</th><th>Max Students</th><th style="width:120px;">Actions</th></tr></thead>
+      <thead><tr><th>Name</th><th>Type</th><th>Department</th><th>Max Students</th><th style="width:120px;">Actions</th></tr></thead>
       <tbody id="roomsTableBody"></tbody>
     </table>
     <div id="roomsEmpty" class="empty-msg hidden">No rooms added yet.</div>
