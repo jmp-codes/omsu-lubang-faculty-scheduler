@@ -19,6 +19,32 @@ function canEditSection(sectionId){
   return !!(sec && sec.department === session.department);
 }
 
+// Faculty ids that belong to the viewer's own department's roster — native
+// members plus anyone linked in via the Faculty page's "Link a Shared
+// Instructor" search (see faculty.js/linkInstructor). state.faculty here is
+// the full cross-department merge (loadFacultyAll), and dept-resource.js
+// always tags each stored record with whichever department's own array it
+// physically lives in, so filtering by that recovers "my department's own
+// list" — linked copies included — with no extra request. Only meaningful
+// for a chair; the registrar's view is never restricted.
+function myFacultyIds(){
+  return new Set(state.faculty.filter(f=>f.department===session.department).map(f=>f.id));
+}
+
+// Whether a chair should see this schedule block at all (read-only
+// visibility, separate from canEditSection's edit permission above). Their
+// own department's sections are always visible; a block for a faculty
+// member they've linked in is visible too — across EVERY department that
+// instructor teaches in — because that's the whole point of linking a
+// shared instructor. Nothing else leaks through. The registrar always sees
+// everything.
+function blockVisibleToViewer(block, myFacIds){
+  if(session.isRegistrar) return true;
+  const sec = sectionById(block.sectionId);
+  if(sec && sec.department === session.department) return true;
+  return !!(block.facultyId && myFacIds.has(block.facultyId));
+}
+
 /* ---- Year preference panel ---- */
 function renderYearPrefPanel(){
   const wrap = document.getElementById('yearPrefBody');
@@ -135,10 +161,14 @@ document.getElementById('revertScheduleBtn').addEventListener('click', function(
 function renderFacultyLoad(){
   const card = document.getElementById('facultyLoadCard');
   const tbody = document.getElementById('facultyLoadBody');
-  if(state.faculty.length===0){ card.style.display='none'; return; }
+  // state.faculty is the full cross-department merge — restrict this to
+  // the viewer's own roster (native + linked) so a chair doesn't get a load
+  // report on every instructor on campus, only their own.
+  const visibleFaculty = session.isRegistrar ? state.faculty : state.faculty.filter(f=>myFacultyIds().has(f.id));
+  if(visibleFaculty.length===0){ card.style.display='none'; return; }
   card.style.display='';
   tbody.innerHTML = '';
-  state.faculty.slice().sort((a,b)=>a.name.localeCompare(b.name)).forEach(f=>{
+  visibleFaculty.slice().sort((a,b)=>a.name.localeCompare(b.name)).forEach(f=>{
     const teachingHrs = state.schedule.filter(b=>b.facultyId===f.id).reduce((s,b)=>s+b.duration,0);
     const externalHrs = (f.externalBusy||[]).reduce((s,b)=>s+b.duration,0);
     const adminUnits = parseAdminUnits(f.designations);
@@ -158,9 +188,16 @@ function renderFacultyLoad(){
 /* ---- Stats + missing list ---- */
 function renderGenStats(){
   const wrap = document.getElementById('genStats');
-  const totalOfferings = expectedBlockIds().length;
-  const placed = state.schedule.length;
-  const missing = computeMissing().length;
+  // These used to always total the whole campus, even for a chair — a
+  // BSBA-OM chair could read off exactly how many sessions BSIT had placed
+  // just from the numbers on this card. Scope them to the viewer's own
+  // department, same as everything else on this page.
+  const scope = session.isRegistrar ? null : session.department;
+  const totalOfferings = expectedBlockIds().filter(e=> !scope || e.sec.department===scope).length;
+  const placed = scope
+    ? state.schedule.filter(b=>{ const sec = sectionById(b.sectionId); return sec && sec.department===scope; }).length
+    : state.schedule.length;
+  const missing = computeMissing().filter(m=> !scope || m.sec.department===scope).length;
   wrap.innerHTML = `
     <div class="stat"><div class="n">${placed}</div><div class="l">Sessions Placed</div></div>
     <div class="stat"><div class="n">${missing}</div><div class="l">Unscheduled</div></div>
@@ -174,7 +211,10 @@ function renderGenStats(){
 let collapsedMissingSections = new Set();
 
 function renderMissingList(){
-  const missing = computeMissing();
+  // Nothing is placed yet for an unscheduled session, so there's no
+  // resource conflict for a chair to coordinate around by seeing another
+  // department's — restrict this to the viewer's own department.
+  const missing = session.isRegistrar ? computeMissing() : computeMissing().filter(m=>m.sec.department===session.department);
   const card = document.getElementById('missingCard');
   const list = document.getElementById('missingList');
   card.style.display = missing.length ? '' : 'none';
@@ -254,8 +294,21 @@ function populateFilterSelect(){
   sel.innerHTML = '';
   document.getElementById('filterGroup').style.display = currentView==='all' ? 'none' : '';
   let items = [];
-  if(currentView==='section') items = state.sections.map(s=>({id:s.id,label:s.name}));
-  if(currentView==='faculty') items = state.faculty.map(f=>({id:f.id,label:f.name}));
+  if(currentView==='section'){
+    // A chair can only browse by their own department's sections — someone
+    // else's section isn't something they'd pick from a dropdown anyway;
+    // they'd reach a shared instructor's other-department classes through
+    // "By Faculty" or "Full View" instead.
+    const visibleSections = session.isRegistrar ? state.sections : state.sections.filter(s=>s.department===session.department);
+    items = visibleSections.map(s=>({id:s.id,label:s.name}));
+  }
+  if(currentView==='faculty'){
+    // Same idea for faculty — only the viewer's own roster (native members
+    // plus anyone they've linked in from another department).
+    const myFac = myFacultyIds();
+    const visibleFaculty = session.isRegistrar ? state.faculty : state.faculty.filter(f=>myFac.has(f.id));
+    items = visibleFaculty.map(f=>({id:f.id,label:f.name}));
+  }
   if(currentView==='room'){
     // A chair can only browse rooms they could actually place a class in —
     // their own department's rooms plus Shared ones; the registrar still
@@ -269,15 +322,26 @@ function populateFilterSelect(){
 }
 document.getElementById('filterSelect').addEventListener('change', renderScheduleGrid);
 
+// Both of these used to operate on the entire campus's state.schedule
+// regardless of viewer — a chair could print or export every other
+// department's placed classes too. Scope to what the viewer can actually
+// see (same rule as the on-screen views).
+function viewerVisibleSchedule(){
+  if(session.isRegistrar) return state.schedule;
+  const myFac = myFacultyIds();
+  return state.schedule.filter(b=>blockVisibleToViewer(b, myFac));
+}
+
 document.getElementById('printScheduleBtn').addEventListener('click', function(){
-  if(state.schedule.length===0){ toast("Generate a schedule first.", 'error'); return; }
+  if(viewerVisibleSchedule().length===0){ toast("Generate a schedule first.", 'error'); return; }
   window.print();
 });
 
 document.getElementById('exportCsvBtn').addEventListener('click', function(){
-  if(state.schedule.length===0){ toast("Generate a schedule first.", 'error'); return; }
+  const visible = viewerVisibleSchedule();
+  if(visible.length===0){ toast("Generate a schedule first.", 'error'); return; }
   const header = ["Day","Start","End","Type","Section","Subject","Faculty","Room","Synced","Manually Placed"];
-  const rows = state.schedule.slice()
+  const rows = visible.slice()
     .sort((a,b)=> DAYS.indexOf(a.day)-DAYS.indexOf(b.day) || a.start-b.start)
     .map(b=>[
       DAY_NAMES[b.day], hourLabel(b.start), hourLabel(b.start+b.duration),
@@ -389,8 +453,13 @@ function renderScheduleGrid(){
 
 function renderFullAgenda(container){
   container.appendChild(el(`<div class="print-only">Weekly Schedule — Full View (All)</div>`));
+  // "All" used to really mean all — every department's blocks, for every
+  // viewer. Restrict it to the viewer's own department's sections plus any
+  // linked shared instructor's classes, same rule as everywhere else.
+  const myFac = session.isRegistrar ? null : myFacultyIds();
   DAYS.forEach(day=>{
-    const dayBlocks = state.schedule.filter(b=>b.day===day).sort((a,b)=>a.start-b.start);
+    let dayBlocks = state.schedule.filter(b=>b.day===day).sort((a,b)=>a.start-b.start);
+    if(!session.isRegistrar) dayBlocks = dayBlocks.filter(b=>blockVisibleToViewer(b, myFac));
     if(dayBlocks.length===0) return;
     const dayWrap = document.createElement('div');
     dayWrap.className = 'agenda-day';
