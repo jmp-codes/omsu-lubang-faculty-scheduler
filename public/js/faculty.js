@@ -41,46 +41,48 @@ function hourOptions(){
   return opts;
 }
 
-// Per-day "earliest start" availability grid for part-time instructors with
-// another job before/after teaching hours — see earliestStart on the
-// faculty record and the matching hard rule in shared.js's hasConflict().
-// Leaving a day unchecked means no restriction that day.
-function renderAvailGrid(earliestStart){
-  const grid = document.getElementById('facAvailGrid');
-  if(!grid) return;
-  earliestStart = earliestStart || {};
-  grid.innerHTML = DAYS.map(d=>{
-    const has = earliestStart[d] !== undefined;
-    return `
-    <div class="row" style="margin-bottom:6px;">
-      <label style="min-width:50px; font-weight:600;"><input type="checkbox" class="availDayChk" data-day="${d}" ${has?'checked':''}> ${d}</label>
-      <select class="availDayTime" data-day="${d}" style="width:150px;" ${has?'':'disabled'}>${hourOptions()}</select>
-    </div>`;
-  }).join("");
-  DAYS.forEach(d=>{
-    if(earliestStart[d] !== undefined){
-      const sel = grid.querySelector(`.availDayTime[data-day="${d}"]`);
-      if(sel) sel.value = earliestStart[d];
-    }
-  });
+// Single per-faculty "Availability" setting — mode is 'full' (default,
+// nothing else to set), 'morning' or 'evening' (one cutoff time, applies
+// every day they teach), or 'days' (a specific set of days they're free,
+// blocked every other day). Matches shared.js's describeAvailability()
+// and the hard rule in hasConflict() (f.availability = {mode, time, days}).
+function renderAvailabilityControls(availability){
+  availability = availability || {};
+  const mode = availability.mode || 'full';
+  const modeSel = document.getElementById('facAvailMode');
+  const timeWrap = document.getElementById('facAvailTimeWrap');
+  const timeSel = document.getElementById('facAvailTime');
+  const daysWrap = document.getElementById('facAvailDaysWrap');
+  if(!modeSel) return;
+  modeSel.value = mode;
+  timeSel.innerHTML = hourOptions();
+  if(availability.time !== undefined) timeSel.value = availability.time;
+  timeWrap.style.display = (mode==='morning' || mode==='evening') ? '' : 'none';
+  const selectedDays = new Set(availability.days || []);
+  daysWrap.innerHTML = DAYS.map(d=>
+    `<button type="button" class="btn btn-sm availDayPill ${selectedDays.has(d)?'btn-teal':''}" data-day="${d}">${d}</button>`
+  ).join("");
+  daysWrap.style.display = mode==='days' ? '' : 'none';
 }
-document.getElementById('facAvailGrid').addEventListener('change', function(e){
-  if(e.target.classList.contains('availDayChk')){
-    const sel = document.querySelector(`.availDayTime[data-day="${e.target.dataset.day}"]`);
-    if(sel) sel.disabled = !e.target.checked;
-  }
+document.getElementById('facAvailMode').addEventListener('change', function(){
+  renderAvailabilityControls({mode: this.value});
 });
-function collectEarliestStart(){
-  const es = {};
-  document.querySelectorAll('#facAvailGrid .availDayChk').forEach(chk=>{
-    if(chk.checked){
-      const sel = document.querySelector(`.availDayTime[data-day="${chk.dataset.day}"]`);
-      es[chk.dataset.day] = parseFloat(sel.value);
-    }
-  });
-  return es;
+document.getElementById('facAvailDaysWrap').addEventListener('click', function(e){
+  const btn = e.target.closest('.availDayPill');
+  if(!btn) return;
+  btn.classList.toggle('btn-teal');
+});
+function collectAvailability(){
+  const mode = document.getElementById('facAvailMode').value;
+  if(mode==='full') return undefined;
+  if(mode==='days'){
+    const days = Array.from(document.querySelectorAll('#facAvailDaysWrap .availDayPill.btn-teal')).map(b=>b.dataset.day);
+    return {mode, days};
+  }
+  const time = parseFloat(document.getElementById('facAvailTime').value);
+  return {mode, time};
 }
-renderAvailGrid({});
+renderAvailabilityControls({});
 
 function renderExternalPanel(facId){
   const panel = document.getElementById('extPanel_'+facId);
@@ -185,7 +187,7 @@ function startEditFaculty(id){
   document.getElementById('facRank').value = f.rank;
   document.getElementById('facQuals').value = (f.qualifications||[]).join("\n");
   document.getElementById('facDesigs').value = (f.designations||[]).join("\n");
-  renderAvailGrid(f.earliestStart || {});
+  renderAvailabilityControls(f.availability || {});
   document.getElementById('facultyFormTitle').textContent = "Edit Faculty";
   document.getElementById('facSaveBtn').textContent = "Save Changes";
   document.getElementById('facCancelBtn').style.display = '';
@@ -197,7 +199,7 @@ function resetFacultyForm(){
   document.getElementById('facRank').value = 'Instructor I';
   document.getElementById('facQuals').value = '';
   document.getElementById('facDesigs').value = '';
-  renderAvailGrid({});
+  renderAvailabilityControls({});
   document.getElementById('facultyFormTitle').textContent = "Add Faculty";
   document.getElementById('facSaveBtn').textContent = "Add Faculty";
   document.getElementById('facCancelBtn').style.display = 'none';
@@ -209,7 +211,7 @@ document.getElementById('facSaveBtn').addEventListener('click', async function()
   const rank = document.getElementById('facRank').value;
   const qualifications = document.getElementById('facQuals').value.split("\n").map(s=>s.trim()).filter(Boolean);
   const designations = document.getElementById('facDesigs').value.split("\n").map(s=>s.trim()).filter(Boolean);
-  const earliestStart = collectEarliestStart();
+  const availability = collectAvailability();
 
   if(!editingFacultyId){
     // Only worth checking when ADDING someone new — renaming an existing
@@ -231,9 +233,9 @@ document.getElementById('facSaveBtn').addEventListener('click', async function()
 
   if(editingFacultyId){
     const f = byId(state.faculty, editingFacultyId);
-    Object.assign(f, {name, rank, qualifications, designations, earliestStart});
+    Object.assign(f, {name, rank, qualifications, designations, availability});
   } else {
-    state.faculty.push({id: uid('fac'), name, rank, qualifications, designations, externalBusy:[], earliestStart});
+    state.faculty.push({id: uid('fac'), name, rank, qualifications, designations, externalBusy:[], availability});
   }
   persistFaculty();
   resetFacultyForm();
