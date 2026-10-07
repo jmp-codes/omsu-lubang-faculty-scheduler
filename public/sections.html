@@ -55,9 +55,13 @@
   </div>
 
   <div class="card">
-    <h2>Sections</h2>
+    <div class="row" style="justify-content:space-between; align-items:center;">
+      <h2 style="margin:0;">Sections</h2>
+      <input type="text" id="secSearchInput" class="search-field" placeholder="Search by section name…">
+    </div>
     <div id="sectionsList"></div>
     <div id="sectionsEmpty" class="empty-msg hidden">No sections added yet.</div>
+    <div id="sectionsSearchEmpty" class="empty-msg hidden">No sections match that search.</div>
   </div>
 </main>
 
