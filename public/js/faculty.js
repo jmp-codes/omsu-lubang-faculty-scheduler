@@ -2,12 +2,19 @@ import {
   state, uid, el, escapeHtml, timeRangeLabel, byId,
   DAYS, DAY_START, DAY_END, hourLabel, parseDelimitedText,
   bootSession, wireDeptBar, loadFaculty, persistFaculty,
-  session, loadFacultyDirectory, describeAvailability, toast
+  session, loadFacultyDirectory, fetchFacultyAll, describeAvailability, toast
 } from './shared.js';
 
 let editingFacultyId = null;
 const facultyExtOpen = {};
 let facultySearchQuery = '';
+
+// The department this page is currently editing — the chair's own
+// department, or whichever department the registrar has picked in the
+// "Managing department" dropdown.
+function myDept(){
+  return session.manageDept || session.department;
+}
 
 // Loose name-normalization for duplicate detection: case/whitespace/
 // punctuation insensitive. Not meant to be bulletproof — just enough to
@@ -32,8 +39,7 @@ function namesLikelyMatch(a,b){
 // currently being edited (state.faculty is already scoped to the current
 // department, so within-department dupes aren't this check's concern).
 function findCrossDeptDuplicate(directory, name){
-  const currentDept = session.manageDept || session.department;
-  return directory.find(f=> f.department!==currentDept && namesLikelyMatch(f.name, name));
+  return directory.find(f=> f.department!==myDept() && namesLikelyMatch(f.name, name));
 }
 
 function hourOptions(){
@@ -124,8 +130,14 @@ function renderFacultyTable(){
     const desigsHtml = (f.designations||[]).map(d=>escapeHtml(d)).join("<br>") || "<span class='muted'>—</span>";
     const extCount = (f.externalBusy||[]).length;
     const availLabel = describeAvailability(f);
+    // A linked-in copy of a shared instructor keeps a record of which
+    // department they're originally from (linkedFrom) even though the
+    // server re-tags this local copy's own .department to whichever
+    // department it's stored under — see linkInstructor() below.
+    const sharedLabel = (f.linkedFrom && f.linkedFrom !== myDept())
+      ? `<div class="badge badge-muted" style="margin-top:4px; text-transform:none; letter-spacing:0;">Shared — from ${escapeHtml(f.linkedFrom)}</div>` : '';
     tr.innerHTML = `
-      <td><strong>${escapeHtml(f.name)}</strong>${availLabel? `<div class="badge badge-muted" style="margin-top:4px; text-transform:none; letter-spacing:0;">${escapeHtml(availLabel)}</div>` : ''}</td>
+      <td><strong>${escapeHtml(f.name)}</strong>${availLabel? `<div class="badge badge-muted" style="margin-top:4px; text-transform:none; letter-spacing:0;">${escapeHtml(availLabel)}</div>` : ''}${sharedLabel}</td>
       <td>${escapeHtml(f.rank||"")}</td>
       <td style="font-size:12.5px;">${qualsHtml}</td>
       <td style="font-size:12.5px;">${desigsHtml}</td>
@@ -237,7 +249,7 @@ document.getElementById('facSaveBtn').addEventListener('click', async function()
     if(dupe){
       const proceed = confirm(
         `A faculty member named "${dupe.name}" already exists in ${dupe.department}.\n\n`+
-        `If this is the SAME person, click Cancel — then ask the registrar to assign them to this department's sections from the Assign Instructors page instead (it already lists every department's faculty together). Two separate records for the same person means the schedule can double-book their time without warning.\n\n`+
+        `If this is the SAME person, click Cancel — then use "Link a Shared Instructor" below instead of adding them again here. Two separate records for the same person means the schedule can double-book their time without warning.\n\n`+
         `Click OK only if this is actually a DIFFERENT person who happens to share that name.`
       );
       if(!proceed) return;
@@ -276,7 +288,7 @@ document.getElementById('facBulkImportBtn').addEventListener('click', async func
     const proceed = confirm(
       `${dupeNotes.length} row(s) look like they might already exist in another department:\n\n`+
       dupeNotes.join("\n")+
-      `\n\nIf any of these are the SAME person, click Cancel and remove that row — assign them to this department's sections from Assign Instructors instead of adding a duplicate record.\n\n`+
+      `\n\nIf any of these are the SAME person, click Cancel and remove that row — use "Link a Shared Instructor" below instead of importing a duplicate record.\n\n`+
       `Click OK to import all rows anyway.`
     );
     if(!proceed) return;
@@ -296,6 +308,58 @@ document.getElementById('facBulkImportBtn').addEventListener('click', async func
   document.getElementById('facBulkText').value = '';
   renderFacultyTable();
   toast(count + " faculty member" + (count===1?"":"s") + " imported.", 'success');
+});
+
+/* ---- Link a Shared Instructor (someone who already teaches in another
+   department, e.g. a minor/GE subject like Rizal) into THIS department's
+   faculty list — copies their current record under the SAME id instead of
+   creating a new one, so hasConflict()/the schedule generator still treat
+   both departments' classes for them as the same person and never
+   double-book their time. ---- */
+function renderLinkResults(matches){
+  const wrap = document.getElementById('facLinkResults');
+  if(!wrap) return;
+  if(matches.length===0){
+    wrap.innerHTML = "<div class='muted' style='font-size:13px;'>No matching instructor found in another department.</div>";
+    return;
+  }
+  wrap.innerHTML = '';
+  matches.forEach(f=>{
+    const row = el(`<span class="chip" style="margin:4px 6px 4px 0;">${escapeHtml(f.name)} <span class="muted" style="font-size:11px;">(${escapeHtml(f.department)})</span> <button class="btn btn-sm btn-teal linkFacBtn" data-id="${f.id}">Link here</button></span>`);
+    wrap.appendChild(row);
+  });
+}
+
+async function linkInstructor(id){
+  let all = [];
+  try{ all = await fetchFacultyAll(); }catch(e){ toast("Could not link that instructor right now.", 'error'); return; }
+  const source = byId(all, id);
+  if(!source){ toast("That instructor couldn't be found anymore — try searching again.", 'error'); return; }
+  if(state.faculty.some(f=>f.id===id)){ toast("Already linked into this department.", 'error'); return; }
+  // Copy the whole record (same id, so schedule conflict-checking still
+  // recognizes it as the same person) and remember where it came from.
+  const copy = Object.assign({}, source, {linkedFrom: source.department});
+  state.faculty.push(copy);
+  persistFaculty();
+  document.getElementById('facLinkResults').innerHTML = '';
+  document.getElementById('facLinkSearch').value = '';
+  renderFacultyTable();
+  toast(`Linked ${source.name} into ${myDept()} — their classes in ${source.department} will still be checked for conflicts.`, 'success');
+}
+
+document.getElementById('facLinkSearchBtn').addEventListener('click', async function(){
+  const q = document.getElementById('facLinkSearch').value.trim().toLowerCase();
+  if(!q){ toast("Type a name to search for.", 'error'); return; }
+  let all = [];
+  try{ all = await fetchFacultyAll(); }catch(e){ toast("Could not search other departments right now.", 'error'); return; }
+  const already = new Set(state.faculty.map(f=>f.id));
+  const matches = all.filter(f=> f.department!==myDept() && !already.has(f.id) && f.name.toLowerCase().includes(q));
+  renderLinkResults(matches);
+});
+document.getElementById('facLinkResults').addEventListener('click', function(e){
+  const btn = e.target.closest('.linkFacBtn');
+  if(!btn) return;
+  linkInstructor(btn.dataset.id);
 });
 
 async function reload(){
