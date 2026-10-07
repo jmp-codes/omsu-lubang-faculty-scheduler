@@ -33,17 +33,72 @@ document.getElementById('yearPrefBody').addEventListener('change', function(e){
   }
 });
 
+// generateSchedule() returns plain warning sentences, and the same handful
+// of sentence shapes repeat verbatim for every affected subject/section —
+// a term with a dozen unassigned subjects used to print "X has no
+// instructor assigned — skipped." a dozen times in a row. These patterns
+// match those exact sentence shapes (see shared.js's warnings.push calls)
+// purely to bucket them for display; they don't change what's generated.
+let collapsedWarningGroups = new Set();
+const WARNING_CATEGORIES = [
+  { key:'no-instructor', label:'No instructor assigned',
+    match:/^(.+) \((.+)\) has no instructor assigned — skipped\.$/,
+    item:(m)=> `${m[1]} — ${m[2]}` },
+  { key:'no-split', label:'Could not split 3-hour lecture (no Mon/Wed or Tue/Thu pair free)',
+    match:/^Could not split the 3-hour lecture for (.+) \((.+)\) across Mon\/Wed or Tue\/Thu — no valid pair found\.$/,
+    item:(m)=> `${m[1]} — ${m[2]}` },
+  { key:'no-slot', label:'No free faculty/room/day-time combination found',
+    match:/^Could not place (lecture|lab) for (.+) \((.+)\) — no free faculty\/room\/day-time combination found\.$/,
+    item:(m)=> `${m[2]} — ${m[3]} (${m[1]==='lab'?'Lab':'Lec'})` },
+  { key:'sync-fallback', label:'Same-time scheduling fallback (placed independently instead)',
+    match:/^Same-time scheduling for (.+) \((.+)\) wasn't feasible — placing sections independently instead\.$/,
+    item:(m)=> `${m[1]} — ${m[2]}` },
+];
+function renderGenWarnings(warnings){
+  const wrap = document.getElementById('genWarnings');
+  wrap.innerHTML = '';
+  if(warnings.length===0){
+    wrap.innerHTML = `<div class="warn-box" style="background:var(--teal-soft); border-color:var(--teal); color:#dbe3ff;">All sessions were scheduled with no conflicts.</div>`;
+    return;
+  }
+  const buckets = new Map();
+  const other = [];
+  warnings.forEach(w=>{
+    const cat = WARNING_CATEGORIES.find(c=>c.match.test(w));
+    if(!cat){ other.push(w); return; }
+    if(!buckets.has(cat.key)) buckets.set(cat.key, { label: cat.label, items: [] });
+    buckets.get(cat.key).items.push(cat.item(w.match(cat.match)));
+  });
+  const box = el(`<div class="warn-box"><strong>${warnings.length} issue${warnings.length===1?'':'s'} during generation:</strong></div>`);
+  const addGroup = (key, label, items)=>{
+    const isOpen = !collapsedWarningGroups.has(key);
+    const det = el(`<details class="group" style="margin-top:8px;">
+      <summary>${escapeHtml(label)} <span class="count">${items.length}</span></summary>
+      <div class="group-body"><ul class="miss-list"></ul></div>
+    </details>`);
+    det.addEventListener('toggle', function(){
+      if(det.open) collapsedWarningGroups.delete(key);
+      else collapsedWarningGroups.add(key);
+    });
+    const ul = det.querySelector('.miss-list');
+    items.forEach(text=> ul.appendChild(el(`<li>${escapeHtml(text)}</li>`)));
+    box.appendChild(det);
+    det.open = isOpen;
+  };
+  WARNING_CATEGORIES.forEach(cat=>{
+    const bucket = buckets.get(cat.key);
+    if(bucket) addGroup(cat.key, cat.label, bucket.items);
+  });
+  if(other.length) addGroup('other', 'Other issues', other);
+  wrap.appendChild(box);
+}
+
 /* ---- Generate / Clear / Revert ---- */
 document.getElementById('generateBtn').addEventListener('click', function(){
   if(state.sections.length===0){ toast("Add sections with subjects first.", 'error'); return; }
   const warnings = generateSchedule();
   renderScheduleTab();
-  const wrap = document.getElementById('genWarnings');
-  if(warnings.length){
-    wrap.innerHTML = `<div class="warn-box"><strong>${warnings.length} issue${warnings.length===1?'':'s'} during generation:</strong><ul>${warnings.map(w=>`<li>${escapeHtml(w)}</li>`).join("")}</ul></div>`;
-  } else {
-        wrap.innerHTML = `<div class="warn-box" style="background:var(--teal-soft); border-color:var(--teal); color:#dbe3ff;">All sessions were scheduled with no conflicts.</div>`;
-  }
+  renderGenWarnings(warnings);
 });
 document.getElementById('clearScheduleBtn').addEventListener('click', function(){
   if(confirm("Clear the entire generated schedule?")){
@@ -124,7 +179,12 @@ function renderMissingList(){
 
   groups.forEach(g=>{
     const isOpen = !collapsedMissingSections.has(g.sec.id);
-    const det = el(`<details class="group"${isOpen?' open':''}>
+    // Build it closed and set .open as a property below, AFTER it's in the
+    // live document — baking `open` into the HTML string here and letting
+    // the browser parse it from a detached template can get silently
+    // collapsed the moment the node is appended, which is why every group
+    // was rendering closed despite isOpen being true on first load.
+    const det = el(`<details class="group">
       <summary>${escapeHtml(g.sec.name)} <span class="count">${g.items.length} unscheduled</span></summary>
       <div class="group-body"><ul class="miss-list"></ul></div>
     </details>`);
@@ -142,6 +202,7 @@ function renderMissingList(){
       ul.appendChild(li);
     });
     list.appendChild(det);
+    det.open = isOpen;
   });
 }
 document.getElementById('missingList').addEventListener('click', function(e){
