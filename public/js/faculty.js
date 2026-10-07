@@ -2,11 +2,12 @@ import {
   state, uid, el, escapeHtml, timeRangeLabel, byId,
   DAYS, DAY_START, DAY_END, hourLabel, parseDelimitedText,
   bootSession, wireDeptBar, loadFaculty, persistFaculty,
-  session, loadFacultyDirectory
+  session, loadFacultyDirectory, describeAvailability, toast
 } from './shared.js';
 
 let editingFacultyId = null;
 const facultyExtOpen = {};
+let facultySearchQuery = '';
 
 // Loose name-normalization for duplicate detection: case/whitespace/
 // punctuation insensitive. Not meant to be bulletproof — just enough to
@@ -111,13 +112,20 @@ function renderFacultyTable(){
   const tbody = document.getElementById('facultyTableBody');
   tbody.innerHTML = "";
   document.getElementById('facultyEmpty').classList.toggle('hidden', state.faculty.length>0);
-  state.faculty.forEach(f=>{
+  const q = facultySearchQuery.trim().toLowerCase();
+  const visible = state.faculty.filter(f=>
+    !q || f.name.toLowerCase().includes(q) || (f.rank||'').toLowerCase().includes(q)
+  );
+  const searchEmpty = document.getElementById('facultySearchEmpty');
+  if(searchEmpty) searchEmpty.classList.toggle('hidden', !(q && visible.length===0 && state.faculty.length>0));
+  visible.forEach(f=>{
     const tr = document.createElement('tr');
-    const qualsHtml = (f.qualifications||[]).map(q=>escapeHtml(q)).join("<br>") || "<span class='muted'>—</span>";
+    const qualsHtml = (f.qualifications||[]).map(s=>escapeHtml(s)).join("<br>") || "<span class='muted'>—</span>";
     const desigsHtml = (f.designations||[]).map(d=>escapeHtml(d)).join("<br>") || "<span class='muted'>—</span>";
     const extCount = (f.externalBusy||[]).length;
+    const availLabel = describeAvailability(f);
     tr.innerHTML = `
-      <td><strong>${escapeHtml(f.name)}</strong></td>
+      <td><strong>${escapeHtml(f.name)}</strong>${availLabel? `<div class="badge badge-muted" style="margin-top:4px; text-transform:none; letter-spacing:0;">${escapeHtml(availLabel)}</div>` : ''}</td>
       <td>${escapeHtml(f.rank||"")}</td>
       <td style="font-size:12.5px;">${qualsHtml}</td>
       <td style="font-size:12.5px;">${desigsHtml}</td>
@@ -137,6 +145,11 @@ function renderFacultyTable(){
     if(extCount || facultyExtOpen[f.id]) renderExternalPanel(f.id);
   });
 }
+
+document.getElementById('facSearchInput').addEventListener('input', function(e){
+  facultySearchQuery = e.target.value;
+  renderFacultyTable();
+});
 
 document.getElementById('facultyTableBody').addEventListener('click', function(e){
   const editBtn = e.target.closest('.editFac');
@@ -207,7 +220,7 @@ function resetFacultyForm(){
 document.getElementById('facCancelBtn').addEventListener('click', resetFacultyForm);
 document.getElementById('facSaveBtn').addEventListener('click', async function(){
   const name = document.getElementById('facName').value.trim();
-  if(!name){ alert("Please enter the faculty name."); return; }
+  if(!name){ toast("Please enter the faculty name.", 'error'); return; }
   const rank = document.getElementById('facRank').value;
   const qualifications = document.getElementById('facQuals').value.split("\n").map(s=>s.trim()).filter(Boolean);
   const designations = document.getElementById('facDesigs').value.split("\n").map(s=>s.trim()).filter(Boolean);
@@ -244,7 +257,7 @@ document.getElementById('facSaveBtn').addEventListener('click', async function()
 
 document.getElementById('facBulkImportBtn').addEventListener('click', async function(){
   const text = document.getElementById('facBulkText').value;
-  if(!text.trim()){ alert("Paste some rows first."); return; }
+  if(!text.trim()){ toast("Paste some rows first.", 'error'); return; }
   const rows = parseDelimitedText(text);
 
   // Same cross-department duplicate check as the single Add Faculty form
@@ -282,7 +295,7 @@ document.getElementById('facBulkImportBtn').addEventListener('click', async func
   persistFaculty();
   document.getElementById('facBulkText').value = '';
   renderFacultyTable();
-  alert(count + " faculty member" + (count===1?"":"s") + " imported.");
+  toast(count + " faculty member" + (count===1?"":"s") + " imported.", 'success');
 });
 
 async function reload(){
