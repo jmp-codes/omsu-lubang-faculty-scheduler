@@ -2,8 +2,10 @@ import {
   state, uid, el, escapeHtml, subjectById, sectionById, syncKey,
   YEAR_LABELS, parseDelimitedText,
   bootSession, wireDeptBar, loadSubjects, loadSections, loadSyncPref,
-  persistSections, persistSyncPref
+  persistSections, persistSyncPref, toast
 } from './shared.js';
+
+let sectionSearchQuery = '';
 
 // Tracks section cards the user has manually collapsed. renderSectionsList()
 // rebuilds every card from scratch after almost every action (add/remove a
@@ -14,9 +16,14 @@ import {
 // card on the page is currently collapsed.
 const collapsedSectionIds = new Set();
 
+document.getElementById('secSearchInput').addEventListener('input', function(e){
+  sectionSearchQuery = e.target.value;
+  renderSectionsList();
+});
+
 document.getElementById('secSaveBtn').addEventListener('click', function(){
   const name = document.getElementById('secName').value.trim();
-  if(!name){ alert("Please enter a section name."); return; }
+  if(!name){ toast("Please enter a section name.", 'error'); return; }
   const year = parseInt(document.getElementById('secYear').value,10);
   const studentCount = parseInt(document.getElementById('secCount').value,10) || 0;
   state.sections.push({id: uid('sec'), name, year, studentCount, subjectIds:[]});
@@ -29,7 +36,7 @@ document.getElementById('secSaveBtn').addEventListener('click', function(){
 
 document.getElementById('secBulkImportBtn').addEventListener('click', function(){
   const text = document.getElementById('secBulkText').value;
-  if(!text.trim()){ alert("Paste some rows first."); return; }
+  if(!text.trim()){ toast("Paste some rows first.", 'error'); return; }
   const rows = parseDelimitedText(text);
   let count = 0;
   const unmatched = new Set();
@@ -61,7 +68,11 @@ function renderSectionsList(){
   const wrap = document.getElementById('sectionsList');
   wrap.innerHTML = "";
   document.getElementById('sectionsEmpty').classList.toggle('hidden', state.sections.length>0);
-  state.sections.forEach(sec=>{
+  const q = sectionSearchQuery.trim().toLowerCase();
+  const visibleSections = state.sections.filter(sec=> !q || sec.name.toLowerCase().includes(q));
+  const searchEmpty = document.getElementById('sectionsSearchEmpty');
+  if(searchEmpty) searchEmpty.classList.toggle('hidden', !(q && visibleSections.length===0 && state.sections.length>0));
+  visibleSections.forEach(sec=>{
     // Archived subjects (retired curriculum) are hidden from this picker so
     // nobody accidentally adds them to a new section, but one already on a
     // section keeps showing normally above via subjectById() regardless.
@@ -179,12 +190,12 @@ document.getElementById('sectionsList').addEventListener('click', function(e){
       (!curriculum || !s.curriculum || s.curriculum === curriculum)
     );
     if(toAdd.length === 0){
-      alert("No matching subjects to add — they may already be on this section, or none exist for "+YEAR_LABELS[sec.year]+" in that semester.");
+      toast("No matching subjects to add — they may already be on this section, or none exist for "+YEAR_LABELS[sec.year]+" in that semester.", 'error');
       return;
     }
     toAdd.forEach(s=> sec.subjectIds.push(s.id));
     persistSections(); renderSectionsList(); renderSyncPanel();
-    alert(toAdd.length + " subject" + (toAdd.length===1?"":"s") + " added to " + sec.name + ".");
+    toast(toAdd.length + " subject" + (toAdd.length===1?"":"s") + " added to " + sec.name + ".", 'success');
   }
   if(rmBtn){
     const sec = sectionById(rmBtn.dataset.sec);
