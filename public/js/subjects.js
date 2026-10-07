@@ -1,9 +1,10 @@
 import {
   state, uid, el, escapeHtml, subjectById, YEAR_LABELS, parseDelimitedText,
-  bootSession, wireDeptBar, loadSubjects, persistSubjects, loadSections, saveSections
+  bootSession, wireDeptBar, loadSubjects, persistSubjects, loadSections, saveSections, toast
 } from './shared.js';
 
 let editingSubjectId = null;
+let subjectSearchQuery = '';
 const SEMESTER_LABELS = {'1st':'1st Sem', '2nd':'2nd Sem', 'summer':'Summer', 'both':'Both Sems'};
 
 // Tracks year-level groups the user has manually collapsed. renderSubjectsGroups()
@@ -40,7 +41,13 @@ function renderSubjectsGroups(){
   wrap.innerHTML = "";
   document.getElementById('subjectsEmpty').classList.toggle('hidden', state.subjects.length>0);
   const showArchived = document.getElementById('subjShowArchived').checked;
-  const visible = state.subjects.filter(s=> showArchived || !s.archived);
+  const q = subjectSearchQuery.trim().toLowerCase();
+  const visible = state.subjects.filter(s=>
+    (showArchived || !s.archived) &&
+    (!q || s.code.toLowerCase().includes(q) || s.name.toLowerCase().includes(q))
+  );
+  const searchEmpty = document.getElementById('subjectsSearchEmpty');
+  if(searchEmpty) searchEmpty.classList.toggle('hidden', !(q && visible.length===0 && state.subjects.length>0));
   refreshCurriculumOptions();
   const byYear = {};
   visible.forEach(s=>{ (byYear[s.year] = byYear[s.year]||[]).push(s); });
@@ -80,6 +87,10 @@ function renderSubjectsGroups(){
   });
 }
 document.getElementById('subjShowArchived').addEventListener('change', renderSubjectsGroups);
+document.getElementById('subjSearchInput').addEventListener('input', function(e){
+  subjectSearchQuery = e.target.value;
+  renderSubjectsGroups();
+});
 
 document.getElementById('subjectsGroups').addEventListener('click', async function(e){
   const editBtn = e.target.closest('.editSubj');
@@ -164,7 +175,7 @@ document.getElementById('subjCancelBtn').addEventListener('click', resetSubjectF
 document.getElementById('subjSaveBtn').addEventListener('click', function(){
   const code = document.getElementById('subjCode').value.trim();
   const name = document.getElementById('subjName').value.trim();
-  if(!code || !name){ alert("Please enter both subject code and name."); return; }
+  if(!code || !name){ toast("Please enter both subject code and name.", 'error'); return; }
   const year = parseInt(document.getElementById('subjYear').value,10);
   const units = parseFloat(document.getElementById('subjUnits').value)||0;
   const type = document.getElementById('subjType').value;
@@ -190,7 +201,7 @@ document.getElementById('subjSaveBtn').addEventListener('click', function(){
 
 document.getElementById('subjBulkImportBtn').addEventListener('click', function(){
   const text = document.getElementById('subjBulkText').value;
-  if(!text.trim()){ alert("Paste some rows first."); return; }
+  if(!text.trim()){ toast("Paste some rows first.", 'error'); return; }
   const rows = parseDelimitedText(text);
   let count = 0;
   rows.forEach(cols=>{
@@ -214,7 +225,7 @@ document.getElementById('subjBulkImportBtn').addEventListener('click', function(
   persistSubjects();
   document.getElementById('subjBulkText').value = '';
   renderSubjectsGroups();
-  alert(count + " subject" + (count===1?"":"s") + " imported.");
+  toast(count + " subject" + (count===1?"":"s") + " imported.", 'success');
 });
 
 async function reload(){
