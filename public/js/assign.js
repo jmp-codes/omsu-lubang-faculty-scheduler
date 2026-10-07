@@ -1,6 +1,6 @@
 import {
   state, el, escapeHtml, assignKey, YEAR_LABELS,
-  bootSession, loadFacultyAll, loadSubjectsAll, loadSectionsAll,
+  bootSession, loadFacultyAll, loadSubjectsAll, loadSectionsAll, loadFacultyDirectory,
   loadSharedData, persistSharedData
 } from './shared.js';
 
@@ -8,6 +8,13 @@ import {
 // assignment (which re-renders the whole tab) doesn't silently snap every
 // group back open — same pattern used on the Subjects/Sections pages.
 const collapsedYears = new Set();
+let facultyDeptById = {};
+// Lets a chair pick an existing faculty member from another department by
+// name+department instead of re-typing them as a new record (see boot()).
+function facOptionLabel(f){
+  const dept = facultyDeptById[f.id];
+  return escapeHtml(f.name) + (dept ? ' ('+escapeHtml(dept)+')' : '');
+}
 
 function renderAssignTab(){
   const wrap = document.getElementById('assignGroups');
@@ -44,7 +51,7 @@ function renderAssignTab(){
             <span class="muted" style="font-size:12px;">Assign same instructor to all sections below:</span>
             <select class="bulkAssign" data-subj="${subj.id}" style="min-width:180px;">
               <option value="">— choose faculty —</option>
-              ${state.faculty.map(f=>`<option value="${f.id}">${escapeHtml(f.name)}</option>`).join("")}
+              ${state.faculty.map(f=>`<option value="${f.id}">${facOptionLabel(f)}</option>`).join("")}
             </select>
           </div>
         </div>
@@ -57,7 +64,7 @@ function renderAssignTab(){
           <div>${escapeHtml(sec.name)} <span class="muted" style="font-size:12px;">(${sec.studentCount} students)</span></div>
           <select class="indivAssign" data-sec="${sec.id}" data-subj="${subj.id}" style="min-width:180px;">
             <option value="">— unassigned —</option>
-            ${state.faculty.map(f=>`<option value="${f.id}" ${f.id===currentFac?'selected':''}>${escapeHtml(f.name)}</option>`).join("")}
+            ${state.faculty.map(f=>`<option value="${f.id}" ${f.id===currentFac?'selected':''}>${facOptionLabel(f)}</option>`).join("")}
           </select>
         </div>`);
         rows.appendChild(row);
@@ -90,6 +97,8 @@ document.getElementById('assignGroups').addEventListener('change', function(e){
 (async function boot(){
   const ok = await bootSession('assign');
   if(!ok) return;
-  await Promise.all([loadFacultyAll(), loadSubjectsAll(), loadSectionsAll(), loadSharedData()]);
+  const [, , , , directory] = await Promise.all([loadFacultyAll(), loadSubjectsAll(), loadSectionsAll(), loadSharedData(), loadFacultyDirectory()]);
+  facultyDeptById = {};
+  (directory||[]).forEach(f=>{ facultyDeptById[f.id] = f.department; });
   renderAssignTab();
 })();
