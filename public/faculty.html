@@ -72,6 +72,16 @@
   </div>
 
   <div class="card">
+    <h2>Link a Shared Instructor</h2>
+    <div class="hint">If someone already teaches in another department (e.g. a minor/GE subject like Rizal), search for them here and link them into this department's list instead of adding a new record. Linking keeps it the same person for scheduling purposes, so their time is still checked for conflicts across both departments.</div>
+    <div class="row">
+      <input type="text" id="facLinkSearch" class="search-field" placeholder="Search instructors in other departments…">
+      <button class="btn btn-teal" id="facLinkSearchBtn">Search</button>
+    </div>
+    <div id="facLinkResults" style="margin-top:10px;"></div>
+  </div>
+
+  <div class="card">
     <h2>Bulk Import Faculty</h2>
     <div class="hint">Paste rows copied from a spreadsheet (tab-separated) or comma-separated text, one faculty member per line: <strong>Name, Rank, Qualifications, Designations</strong>. Separate multiple qualifications/designations within a cell using semicolons ( ; ).</div>
     <textarea id="facBulkText" rows="4" placeholder="Dr. Juan Cruz, Professor I, BS Computer Science; MS Info Tech, Program Chair - 6 units&#10;Prof. Maria Santos, Instructor II, BS Education,"></textarea>
