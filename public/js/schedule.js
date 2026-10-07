@@ -256,7 +256,14 @@ function populateFilterSelect(){
   let items = [];
   if(currentView==='section') items = state.sections.map(s=>({id:s.id,label:s.name}));
   if(currentView==='faculty') items = state.faculty.map(f=>({id:f.id,label:f.name}));
-  if(currentView==='room') items = state.rooms.map(r=>({id:r.id,label:r.name}));
+  if(currentView==='room'){
+    // A chair can only browse rooms they could actually place a class in —
+    // their own department's rooms plus Shared ones; the registrar still
+    // sees every room.
+    const visibleRooms = session.isRegistrar ? state.rooms
+      : state.rooms.filter(r=> !r.department || r.department===session.department);
+    items = visibleRooms.map(r=>({id:r.id,label:r.name}));
+  }
   if(items.length===0){ sel.innerHTML = '<option value="">(none available)</option>'; return; }
   sel.innerHTML = items.map(i=>`<option value="${i.id}">${escapeHtml(i.label)}</option>`).join("");
 }
@@ -477,7 +484,10 @@ function openEditModal(opts){
     return;
   }
   const subj = subjectById(subjectId);
-  const roomOptions = state.rooms.filter(r=>r.type===segType);
+  // Only offer rooms this section could actually be generated into — its
+  // own department's rooms plus Shared ones — so a manual placement can't
+  // put a class in a room dedicated to another department.
+  const roomOptions = state.rooms.filter(r=>r.type===segType && (!r.department || !sec || r.department===sec.department));
   const secName = sec ? sec.name : (existingBlock ? existingBlock.sectionName : '(deleted section)');
   const subjLabel = subj ? subj.code+' — '+subj.name : (existingBlock ? existingBlock.subject : '(deleted subject)');
 
