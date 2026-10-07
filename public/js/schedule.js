@@ -4,7 +4,7 @@ import {
   yearsInUse, downloadTextFile, toCsv, hasConflict, generateSchedule, expectedBlockIds, computeMissing,
   backupSchedule, revertSchedule, parseAdminUnits, rescheduleBlockWithCascade,
   bootSession, loadFacultyAll, loadSubjectsAll, loadSectionsAll, loadSyncPrefAll,
-  loadSharedData, persistSharedData
+  loadSharedData, persistSharedData, describeAvailability, toast
 } from './shared.js';
 
 /* ---- Year preference panel ---- */
@@ -35,7 +35,7 @@ document.getElementById('yearPrefBody').addEventListener('change', function(e){
 
 /* ---- Generate / Clear / Revert ---- */
 document.getElementById('generateBtn').addEventListener('click', function(){
-  if(state.sections.length===0){ alert("Add sections with subjects first."); return; }
+  if(state.sections.length===0){ toast("Add sections with subjects first.", 'error'); return; }
   const warnings = generateSchedule();
   renderScheduleTab();
   const wrap = document.getElementById('genWarnings');
@@ -149,12 +149,12 @@ function populateFilterSelect(){
 document.getElementById('filterSelect').addEventListener('change', renderScheduleGrid);
 
 document.getElementById('printScheduleBtn').addEventListener('click', function(){
-  if(state.schedule.length===0){ alert("Generate a schedule first."); return; }
+  if(state.schedule.length===0){ toast("Generate a schedule first.", 'error'); return; }
   window.print();
 });
 
 document.getElementById('exportCsvBtn').addEventListener('click', function(){
-  if(state.schedule.length===0){ alert("Generate a schedule first."); return; }
+  if(state.schedule.length===0){ toast("Generate a schedule first.", 'error'); return; }
   const header = ["Day","Start","End","Type","Section","Subject","Faculty","Room","Synced","Manually Placed"];
   const rows = state.schedule.slice()
     .sort((a,b)=> DAYS.indexOf(a.day)-DAYS.indexOf(b.day) || a.start-b.start)
@@ -228,7 +228,16 @@ function renderScheduleGrid(){
       if(block){
         const span = Math.max(1, Math.round(block.duration / TIME_STEP));
         for(let k=1;k<span;k++) skip[day+"_"+(h+k*TIME_STEP)] = true;
-        rows += `<td rowspan="${span}" data-day="${day}" data-start="${h}"><div class="block ${block.type} ${block.manual?'manual':''}" data-block="${block.blockId}"${draggableView?' draggable="true"':''}>
+        // A small gold corner dot flags a block whose instructor has a
+        // standing availability restriction (see the Availability dropdown
+        // on the Faculty page) — a reminder, while scanning the grid, that
+        // this placement is pinned to a narrower window than most, with the
+        // restriction itself in the native tooltip rather than cluttering
+        // the block's visible text.
+        const blockFac = block.facultyId ? byId(state.faculty, block.facultyId) : null;
+        const availLabel = blockFac ? describeAvailability(blockFac) : '';
+        const restrictedTitle = availLabel ? ` title="${escapeHtml(facultyName(block.facultyId))}: ${escapeHtml(availLabel)}"` : '';
+        rows += `<td rowspan="${span}" data-day="${day}" data-start="${h}"><div class="block ${block.type} ${block.manual?'manual':''}${availLabel?' restricted':''}" data-block="${block.blockId}"${draggableView?' draggable="true"':''}${restrictedTitle}>
           <div class="b-title">${escapeHtml(block.subject)}</div>
           <div class="b-sub">${currentView!=='section'?escapeHtml(block.sectionName)+' · ':''}${currentView!=='faculty'?escapeHtml(facultyName(block.facultyId))+' · ':''}${currentView!=='room'?escapeHtml(block.roomName):''}</div>
           <div class="b-sub">${timeRangeLabel(block.start,block.duration)}</div>
@@ -303,14 +312,16 @@ document.getElementById('scheduleView').addEventListener('drop', function(e){
   if(!blockId) return;
   const result = rescheduleBlockWithCascade(blockId, cell.dataset.day, parseFloat(cell.dataset.start));
   if(!result.ok){
-    alert("Couldn't move that class there: " + result.reason);
+    toast("Couldn't move that class there: " + result.reason, 'error', 6000);
     return;
   }
   renderScheduleTab();
   const bumped = result.shifted.filter(s=>s.blockId!==blockId);
   if(bumped.length){
-    alert("Moved. To keep the break rule and avoid overlaps, this also shifted: "
-      + bumped.map(s=>`${s.subject} → ${DAY_NAMES[s.day]} ${hourLabel(s.start)}`).join(", "));
+    toast("Moved. To keep the break rule and avoid overlaps, this also shifted: "
+      + bumped.map(s=>`${s.subject} → ${DAY_NAMES[s.day]} ${hourLabel(s.start)}`).join(", "), 'success', 6000);
+  } else {
+    toast("Moved.", 'success');
   }
 });
 
@@ -379,7 +390,7 @@ function openEditModal(opts){
   }
 
   modal.querySelector('#editSaveBtn').addEventListener('click', function(){
-    if(!sec || !subj){ alert("That section or subject no longer exists — this session can only be unscheduled."); return; }
+    if(!sec || !subj){ toast("That section or subject no longer exists — this session can only be unscheduled.", 'error'); return; }
     const newDay = modal.querySelector('#editDay').value;
     const newStart = parseFloat(modal.querySelector('#editStart').value);
     const newRoomId = modal.querySelector('#editRoom').value;
