@@ -23,8 +23,19 @@ function renderStatusBanner(){
 
 function renderCards(){
   const grid = document.getElementById('homeGrid');
+  // state.faculty comes from loadFacultyAll() (every department merged —
+  // Rooms/Assign/Schedule need to see all of them at once), so the big
+  // number on the Faculty card is always the university-wide total, even
+  // for a chair. That reads as "other departments' faculty showing up on
+  // my page," so for a chair (never the registrar, who has no single "own
+  // department") add a second line with just their own department's count.
+  // Every faculty record gets .department tagged server-side on save (see
+  // dept-resource.js's onRequestPut), so this filter is reliable.
+  const myDeptFacultyCount = session.isRegistrar ? null
+    : state.faculty.filter(f=>f.department===session.department).length;
   const cards = [
-    {href:'faculty.html', title:'Faculty', n:state.faculty.length, d:'faculty members'},
+    {href:'faculty.html', title:'Faculty', n:state.faculty.length, d:'faculty members',
+      sub: myDeptFacultyCount===null ? null : `${myDeptFacultyCount} in ${session.department}`},
     {href:'subjects.html', title:'Subjects', n:state.subjects.length, d:'subjects'},
     {href:'sections.html', title:'Sections', n:state.sections.length, d:'sections'}
   ];
@@ -40,6 +51,7 @@ function renderCards(){
       <h3>${c.title}</h3>
       <div class="n">${c.n}</div>
       <div class="d">${c.d}</div>
+      ${c.sub ? `<div class="d" style="margin-top:2px;">${c.sub}</div>` : ''}
     </a>
   `).join("");
 }
