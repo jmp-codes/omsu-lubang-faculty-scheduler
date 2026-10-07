@@ -41,13 +41,17 @@
   </div>
 
   <div class="card">
-    <h2>Room List</h2>
+    <div class="row" style="justify-content:space-between; align-items:center;">
+      <h2 style="margin:0;">Room List</h2>
+      <input type="text" id="roomSearchInput" class="search-field" placeholder="Search by room name…">
+    </div>
     <div class="hint">For each lecture room, you can assign "home sections" — those sections' lecture classes are scheduled there first. If the room isn't free at a given time, the generator still schedules the class, just in another lecture room. Laboratory rooms don't have home sections — every section shares whichever lab room fits the subject.</div>
     <table>
       <thead><tr><th>Name</th><th>Type</th><th>Max Students</th><th style="width:120px;">Actions</th></tr></thead>
       <tbody id="roomsTableBody"></tbody>
     </table>
     <div id="roomsEmpty" class="empty-msg hidden">No rooms added yet.</div>
+    <div id="roomsSearchEmpty" class="empty-msg hidden">No rooms match that search.</div>
   </div>
 </main>
 
