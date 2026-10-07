@@ -1,11 +1,23 @@
 import {
-  state, el, escapeHtml, byId, facultyName, subjectById, roomById, sectionById,
+  state, session, el, escapeHtml, byId, facultyName, subjectById, roomById, sectionById,
   assignKey, syncKey, YEAR_LABELS, DAYS, DAY_NAMES, DAY_START, DAY_END, TIME_STEP, spansLunch, hourLabel, timeRangeLabel,
   yearsInUse, downloadTextFile, toCsv, hasConflict, generateSchedule, expectedBlockIds, computeMissing,
-  backupSchedule, revertSchedule, parseAdminUnits, rescheduleBlockWithCascade,
+  clearSchedule, revertSchedule, hasDeptScheduleBackup, parseAdminUnits, rescheduleBlockWithCascade,
   bootSession, loadFacultyAll, loadSubjectsAll, loadSectionsAll, loadSyncPrefAll,
   loadSharedData, persistSharedData, describeAvailability, toast
 } from './shared.js';
+
+// Every write-side action on this page (Generate/Clear/Revert, manual
+// edit/drag-reschedule) is scoped to the registrar's whole campus, or to
+// just a chair's own department — null means "whole campus" throughout.
+function deptScope(){
+  return session.isRegistrar ? null : session.department;
+}
+function canEditSection(sectionId){
+  if(session.isRegistrar) return true;
+  const sec = sectionById(sectionId);
+  return !!(sec && sec.department === session.department);
+}
 
 /* ---- Year preference panel ---- */
 function renderYearPrefPanel(){
@@ -96,22 +108,25 @@ function renderGenWarnings(warnings){
 /* ---- Generate / Clear / Revert ---- */
 document.getElementById('generateBtn').addEventListener('click', function(){
   if(state.sections.length===0){ toast("Add sections with subjects first.", 'error'); return; }
-  const warnings = generateSchedule();
+  const scope = deptScope();
+  const warnings = generateSchedule(scope);
   renderScheduleTab();
   renderGenWarnings(warnings);
+  if(scope) toast(`Generated ${scope}'s schedule — other departments' sessions weren't touched.`, 'success');
 });
 document.getElementById('clearScheduleBtn').addEventListener('click', function(){
-  if(confirm("Clear the entire generated schedule?")){
-    backupSchedule();
-    state.schedule = [];
-    state.manualRemoved = {};
-    persistSharedData();
+  const scope = deptScope();
+  const msg = scope
+    ? `Clear ${scope}'s generated schedule? Other departments' sessions won't be affected.`
+    : "Clear the entire generated schedule?";
+  if(confirm(msg)){
+    clearSchedule(scope);
     document.getElementById('genWarnings').innerHTML = '';
     renderScheduleTab();
   }
 });
 document.getElementById('revertScheduleBtn').addEventListener('click', function(){
-  revertSchedule();
+  revertSchedule(deptScope());
   document.getElementById('genWarnings').innerHTML = '';
   renderScheduleTab();
 });
@@ -193,11 +208,18 @@ function renderMissingList(){
       else collapsedMissingSections.add(g.sec.id);
     });
     const ul = det.querySelector('.miss-list');
+    // A chair can see every department's unscheduled sessions here, for
+    // coordination (shared rooms), but can only place/edit their own —
+    // same split as the grid below.
+    const canEdit = canEditSection(g.sec.id);
     g.items.forEach(m=>{
+      const action = canEdit
+        ? `<button class="btn btn-sm btn-teal placeManualBtn" data-block="${m.blockId}" data-sec="${m.sec.id}" data-subj="${m.subj.id}" data-seg="${m.segType}" data-hours="${m.hours}">Place manually</button>`
+        : `<span class="muted" style="font-size:12px;">${escapeHtml(g.sec.department||'')} only</span>`;
       const li = el(`<li>
         <div><span class="badge ${m.segType==='lab'?'badge-lab':'badge-lecture'}">${m.segType==='lab'?'Lab':'Lec'}</span>
           ${escapeHtml(m.subj.code)} <span class="muted">(${m.hours}h)</span></div>
-        <button class="btn btn-sm btn-teal placeManualBtn" data-block="${m.blockId}" data-sec="${m.sec.id}" data-subj="${m.subj.id}" data-seg="${m.segType}" data-hours="${m.hours}">Place manually</button>
+        ${action}
       </li>`);
       ul.appendChild(li);
     });
@@ -266,7 +288,9 @@ function renderScheduleTab(){
   renderMissingList();
   renderScheduleGrid();
   renderFacultyLoad();
-  document.getElementById('revertScheduleBtn').disabled = !state.hasScheduleBackup;
+  document.getElementById('revertScheduleBtn').disabled = session.isRegistrar
+    ? !state.hasScheduleBackup
+    : !hasDeptScheduleBackup(session.department);
 }
 
 function renderScheduleGrid(){
@@ -328,8 +352,15 @@ function renderScheduleGrid(){
         // the block's visible text.
         const blockFac = block.facultyId ? byId(state.faculty, block.facultyId) : null;
         const availLabel = blockFac ? describeAvailability(blockFac) : '';
-        const restrictedTitle = availLabel ? ` title="${escapeHtml(facultyName(block.facultyId))}: ${escapeHtml(availLabel)}"` : '';
-        rows += `<td rowspan="${span}" data-day="${day}" data-start="${h}"><div class="block ${block.type} ${block.manual?'manual':''}${availLabel?' restricted':''}" data-block="${block.blockId}"${draggableView?' draggable="true"':''}${restrictedTitle}>
+        // A chair can see every department's blocks on shared views (By
+        // Room/Full View) for coordination, but can only drag/edit their
+        // own — other-department blocks get a muted look and a tooltip
+        // instead of the drag handle.
+        const canEdit = canEditSection(block.sectionId);
+        const otherDeptTitle = canEdit ? '' : `Managed by ${sectionById(block.sectionId)?.department||'another department'}`;
+        const titleText = [otherDeptTitle, availLabel ? `${facultyName(block.facultyId)}: ${availLabel}` : ''].filter(Boolean).join(' — ');
+        const restrictedTitle = titleText ? ` title="${escapeHtml(titleText)}"` : '';
+        rows += `<td rowspan="${span}" data-day="${day}" data-start="${h}"><div class="block ${block.type} ${block.manual?'manual':''}${availLabel?' restricted':''}${canEdit?'':' other-dept'}" data-block="${block.blockId}"${draggableView&&canEdit?' draggable="true"':''}${restrictedTitle}>
           <div class="b-title">${escapeHtml(block.subject)}</div>
           <div class="b-sub">${currentView!=='section'?escapeHtml(block.sectionName)+' · ':''}${currentView!=='faculty'?escapeHtml(facultyName(block.facultyId))+' · ':''}${currentView!=='room'?escapeHtml(block.roomName):''}</div>
           <div class="b-sub">${timeRangeLabel(block.start,block.duration)}</div>
@@ -358,13 +389,14 @@ function renderFullAgenda(container){
     dayWrap.className = 'agenda-day';
     dayWrap.innerHTML = `<h3>${DAY_NAMES[day]}</h3>`;
     dayBlocks.forEach(b=>{
+      const canEdit = canEditSection(b.sectionId);
       const item = el(`<div class="agenda-item">
         <div class="t">${timeRangeLabel(b.start,b.duration)}</div>
         <div style="flex:1;">
           <span class="badge ${b.type==='lab'?'badge-lab':'badge-lecture'}">${b.type==='lab'?'Lab':'Lec'}</span>
           <strong>${escapeHtml(b.subject)}</strong> — ${escapeHtml(b.sectionName)} · ${escapeHtml(facultyName(b.facultyId))} · ${escapeHtml(b.roomName)}
         </div>
-        <button class="btn btn-sm editBlockBtn" data-block="${b.blockId}">Edit</button>
+        ${canEdit ? `<button class="btn btn-sm editBlockBtn" data-block="${b.blockId}">Edit</button>` : `<span class="muted" style="font-size:12px;">${escapeHtml(sectionById(b.sectionId)?.department||'')} only</span>`}
       </div>`);
       dayWrap.appendChild(item);
     });
@@ -402,6 +434,11 @@ document.getElementById('scheduleView').addEventListener('drop', function(e){
   e.preventDefault();
   const blockId = e.dataTransfer.getData('text/plain');
   if(!blockId) return;
+  const dragged = state.schedule.find(b=>b.blockId===blockId);
+  if(dragged && !canEditSection(dragged.sectionId)){
+    toast("This session belongs to another department — only its chair or the registrar can move it.", 'error');
+    return;
+  }
   const result = rescheduleBlockWithCascade(blockId, cell.dataset.day, parseFloat(cell.dataset.start));
   if(!result.ok){
     toast("Couldn't move that class there: " + result.reason, 'error', 6000);
@@ -432,6 +469,13 @@ function openEditModal(opts){
     facultyId = existingBlock.facultyId; day = existingBlock.day; start = existingBlock.start; roomId = existingBlock.roomId;
   }
   const sec = sectionById(sectionId);
+  // Last line of defense (the grid/agenda/missing-list UI already hides or
+  // disables the controls that reach here for a section outside a chair's
+  // own department) — covers every entry point into this modal in one spot.
+  if(!session.isRegistrar && sec && sec.department !== session.department){
+    toast("This session belongs to another department — only its chair or the registrar can make changes to it.", 'error');
+    return;
+  }
   const subj = subjectById(subjectId);
   const roomOptions = state.rooms.filter(r=>r.type===segType);
   const secName = sec ? sec.name : (existingBlock ? existingBlock.sectionName : '(deleted section)');
