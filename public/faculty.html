@@ -34,11 +34,20 @@
           <option value="Part-Time Instructor">Part-Time Instructor</option>
         </select>
       </div>
-      <div class="field wide"><label>Educational Qualification (one per line)</label>
-        <textarea id="facQuals" placeholder="Bachelor of Science in Information Technology&#10;Master of Information Technology"></textarea>
-      </div>
-      <div class="field wide"><label>Designation w/ Equivalent Units (one per line)</label>
-        <textarea id="facDesigs" placeholder="Program Chair — 6 units&#10;Research Coordinator — 3 units"></textarea>
+      <div class="field wide">
+        <details class="group">
+          <summary>Additional Details <span class="count">qualifications &amp; designations (optional)</span></summary>
+          <div class="group-body">
+            <div class="form-grid" style="margin-bottom:0;">
+              <div class="field wide"><label>Educational Qualification (one per line)</label>
+                <textarea id="facQuals" placeholder="Bachelor of Science in Information Technology&#10;Master of Information Technology"></textarea>
+              </div>
+              <div class="field wide"><label>Designation w/ Equivalent Units (one per line)</label>
+                <textarea id="facDesigs" placeholder="Program Chair — 6 units&#10;Research Coordinator — 3 units"></textarea>
+              </div>
+            </div>
+          </div>
+        </details>
       </div>
       <div class="field wide">
         <label>Availability</label>
@@ -72,12 +81,16 @@
   </div>
 
   <div class="card">
-    <h2>Faculty List</h2>
+    <div class="row" style="justify-content:space-between; align-items:center;">
+      <h2 style="margin:0;">Faculty List</h2>
+      <input type="text" id="facSearchInput" class="search-field" placeholder="Search by name or rank…">
+    </div>
     <table>
       <thead><tr><th style="width:16%">Name</th><th style="width:14%">Rank</th><th style="width:20%">Qualifications</th><th style="width:20%">Designations</th><th style="width:16%">External Schedule</th><th style="width:10%">Actions</th></tr></thead>
       <tbody id="facultyTableBody"></tbody>
     </table>
     <div id="facultyEmpty" class="empty-msg hidden">No faculty added yet.</div>
+    <div id="facultySearchEmpty" class="empty-msg hidden">No faculty match that search.</div>
   </div>
 </main>
 
