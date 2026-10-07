@@ -202,3 +202,13 @@
   .user-badge{ text-align:right; margin-right:6px; line-height:1.4; }
   .dept-bar{ display:flex; align-items:center; gap:8px; margin-top:12px; padding-top:12px; border-top:1px solid var(--border-soft); }
   .dept-bar select{ min-width:140px; }
+  .toast-root{ position:fixed; bottom:20px; right:20px; z-index:200; display:flex; flex-direction:column; gap:8px; max-width:360px; }
+  .toast{ background:var(--panel); border:1px solid var(--border); border-left:3px solid var(--teal); color:var(--text);
+    padding:10px 14px; border-radius:8px; box-shadow:var(--shadow); font-size:13px; line-height:1.4; transition:opacity .2s; }
+  .toast.success{ border-left-color:var(--teal); }
+  .toast.error{ border-left-color:var(--red); }
+  .toast.info{ border-left-color:var(--gold); }
+  .search-field{ min-width:220px; }
+  .block{ position:relative; }
+  .block.restricted::after{ content:""; position:absolute; top:4px; right:4px; width:7px; height:7px; border-radius:50%;
+    background:var(--gold); box-shadow:0 0 0 2px rgba(0,0,0,0.25); }
