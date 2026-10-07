@@ -98,19 +98,50 @@ function renderGenStats(){
   `;
 }
 
+// Tracks which section groups below have been manually collapsed, so a
+// re-render (e.g. after placing one session) doesn't snap every group back
+// open — same pattern as subjects.js/assign.js's collapsedYears.
+let collapsedMissingSections = new Set();
+
 function renderMissingList(){
   const missing = computeMissing();
   const card = document.getElementById('missingCard');
   const list = document.getElementById('missingList');
   card.style.display = missing.length ? '' : 'none';
   list.innerHTML = '';
+  if(missing.length === 0) return;
+
+  // Group by section instead of one long flat list — a term with lots of
+  // unscheduled sessions was turning this card into a scroll of 20-30 rows
+  // with no structure. Same collapsible <details class="group"> pattern
+  // used on the Subjects/Assign Instructors pages.
+  const bySection = new Map();
   missing.forEach(m=>{
-    const li = el(`<li>
-      <div><span class="badge ${m.segType==='lab'?'badge-lab':'badge-lecture'}">${m.segType==='lab'?'Lab':'Lec'}</span>
-        ${escapeHtml(m.subj.code)} — ${escapeHtml(m.sec.name)} <span class="muted">(${m.hours}h)</span></div>
-      <button class="btn btn-sm btn-teal placeManualBtn" data-block="${m.blockId}" data-sec="${m.sec.id}" data-subj="${m.subj.id}" data-seg="${m.segType}" data-hours="${m.hours}">Place manually</button>
-    </li>`);
-    list.appendChild(li);
+    if(!bySection.has(m.sec.id)) bySection.set(m.sec.id, { sec: m.sec, items: [] });
+    bySection.get(m.sec.id).items.push(m);
+  });
+  const groups = Array.from(bySection.values()).sort((a,b)=> a.sec.name.localeCompare(b.sec.name));
+
+  groups.forEach(g=>{
+    const isOpen = !collapsedMissingSections.has(g.sec.id);
+    const det = el(`<details class="group"${isOpen?' open':''}>
+      <summary>${escapeHtml(g.sec.name)} <span class="count">${g.items.length} unscheduled</span></summary>
+      <div class="group-body"><ul class="miss-list"></ul></div>
+    </details>`);
+    det.addEventListener('toggle', function(){
+      if(det.open) collapsedMissingSections.delete(g.sec.id);
+      else collapsedMissingSections.add(g.sec.id);
+    });
+    const ul = det.querySelector('.miss-list');
+    g.items.forEach(m=>{
+      const li = el(`<li>
+        <div><span class="badge ${m.segType==='lab'?'badge-lab':'badge-lecture'}">${m.segType==='lab'?'Lab':'Lec'}</span>
+          ${escapeHtml(m.subj.code)} <span class="muted">(${m.hours}h)</span></div>
+        <button class="btn btn-sm btn-teal placeManualBtn" data-block="${m.blockId}" data-sec="${m.sec.id}" data-subj="${m.subj.id}" data-seg="${m.segType}" data-hours="${m.hours}">Place manually</button>
+      </li>`);
+      ul.appendChild(li);
+    });
+    list.appendChild(det);
   });
 }
 document.getElementById('missingList').addEventListener('click', function(e){
