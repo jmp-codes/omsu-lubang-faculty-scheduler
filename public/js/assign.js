@@ -1,5 +1,5 @@
 import {
-  state, el, escapeHtml, assignKey, YEAR_LABELS,
+  state, el, escapeHtml, assignKey, YEAR_LABELS, describeAvailability,
   bootSession, loadFacultyAll, loadSubjectsAll, loadSectionsAll, loadFacultyDirectory,
   loadSharedData, persistSharedData
 } from './shared.js';
@@ -13,7 +13,11 @@ let facultyDeptById = {};
 // name+department instead of re-typing them as a new record (see boot()).
 function facOptionLabel(f){
   const dept = facultyDeptById[f.id];
-  return escapeHtml(f.name) + (dept ? ' ('+escapeHtml(dept)+')' : '');
+  const avail = describeAvailability(f);
+  let label = escapeHtml(f.name);
+  if(dept) label += ' ('+escapeHtml(dept)+')';
+  if(avail) label += ' — ' + escapeHtml(avail);
+  return label;
 }
 
 function renderAssignTab(){
