@@ -161,6 +161,7 @@
   .block.lecture{ background:linear-gradient(180deg, rgba(89,119,224,0.18), rgba(89,119,224,0.10)); border-left:3px solid var(--teal); }
   .block.lab{ background:linear-gradient(180deg, rgba(232,189,63,0.18), rgba(232,189,63,0.10)); border-left:3px solid var(--gold); }
   .block.manual{ outline:1px dashed var(--blue); outline-offset:-2px; }
+  .block.other-dept{ cursor:default; opacity:0.78; }
   .block .b-title{ font-weight:700; color:var(--text); }
   .block .b-sub{ color:var(--muted); }
   .block:hover{ filter:brightness(1.15); }
