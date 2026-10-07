@@ -438,17 +438,13 @@ function isEdgeHour(h){
 
 export function candidateStartHours(segType, year){
   const yearPref = state.yearPref[year] || 'none';
-  // Labs get pushed toward the OPPOSITE time of day from that year's
-  // lecture preference where one is set — a year that prefers morning
-  // lectures gets its labs nudged toward the afternoon, and vice versa —
-  // so the two don't end up competing for the same rooms/hours. This is
-  // still just an ordering of candidate start times (a soft preference),
-  // not a hard rule: if the opposite half of the day has no room left,
-  // placement still falls back to whatever slot actually works.
-  const pref = segType==='lecture' ? yearPref
-    : yearPref==='morning' ? 'afternoon'
-    : yearPref==='afternoon' ? 'morning'
-    : 'none';
+  // The year's morning/afternoon preference only steers LECTURE placement.
+  // Labs always use the day's slots in their natural (no-bias) order —
+  // they used to be pushed toward the opposite half of the day from the
+  // lecture preference, which meant a year with a "morning" lecture
+  // preference ended up with its labs avoiding mornings entirely. Labs
+  // should be free to land in the morning just like any other slot.
+  const pref = segType==='lecture' ? yearPref : 'none';
   const all = [];
   // A start time that falls IN the lunch window is always invalid, no
   // matter the segment's duration — skip those here. A start time that
