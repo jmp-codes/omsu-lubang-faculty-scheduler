@@ -1,6 +1,7 @@
 import {
-  state, el, escapeHtml, assignKey, YEAR_LABELS, describeAvailability,
-  bootSession, loadFacultyAll, loadSubjectsAll, loadSectionsAll, loadFacultyDirectory,
+  state, el, escapeHtml, assignKey, YEAR_LABELS, describeAvailability, session,
+  bootSession, loadFaculty, loadSubjects, loadSections,
+  loadFacultyAll, loadSubjectsAll, loadSectionsAll, loadFacultyDirectory,
   loadSharedData, persistSharedData
 } from './shared.js';
 
@@ -13,9 +14,13 @@ let facultyDeptById = {};
 // name+department instead of re-typing them as a new record (see boot()).
 function facOptionLabel(f){
   const dept = facultyDeptById[f.id];
+  const myDept = session.manageDept || session.department;
   const avail = describeAvailability(f);
   let label = escapeHtml(f.name);
-  if(dept) label += ' ('+escapeHtml(dept)+')';
+  // Only call out the department when it differs from the one being
+  // managed here — a chair's own faculty would otherwise all show a
+  // redundant "(BSIT)" next to every single name.
+  if(dept && dept!==myDept) label += ' ('+escapeHtml(dept)+')';
   if(avail) label += ' — ' + escapeHtml(avail);
   return label;
 }
@@ -101,7 +106,15 @@ document.getElementById('assignGroups').addEventListener('change', function(e){
 (async function boot(){
   const ok = await bootSession('assign');
   if(!ok) return;
-  const [, , , , directory] = await Promise.all([loadFacultyAll(), loadSubjectsAll(), loadSectionsAll(), loadSharedData(), loadFacultyDirectory()]);
+  // The registrar still manages the whole campus here in one merged view
+  // (unchanged). A chair only sees their own department's sections/
+  // subjects/faculty — plus any instructor they've linked in from another
+  // department on the Faculty page — so they can no longer assign another
+  // department's instructor to another department's section.
+  const facultyLoader = session.isRegistrar ? loadFacultyAll : loadFaculty;
+  const subjectsLoader = session.isRegistrar ? loadSubjectsAll : loadSubjects;
+  const sectionsLoader = session.isRegistrar ? loadSectionsAll : loadSections;
+  const [, , , , directory] = await Promise.all([facultyLoader(), subjectsLoader(), sectionsLoader(), loadSharedData(), loadFacultyDirectory()]);
   facultyDeptById = {};
   (directory||[]).forEach(f=>{ facultyDeptById[f.id] = f.department; });
   renderAssignTab();
