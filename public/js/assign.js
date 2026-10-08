@@ -1,6 +1,6 @@
 import {
   state, el, escapeHtml, icon, assignKey, YEAR_LABELS, describeAvailability, session,
-  bootSession, loadFaculty, loadSubjects, loadSections,
+  bootSession, renderPageTitle, loadFaculty, loadSubjects, loadSections,
   loadFacultyAll, loadSubjectsAll, loadSectionsAll, loadFacultyDirectory,
   loadSharedData, persistSharedData
 } from './shared.js';
@@ -10,7 +10,18 @@ import {
 // and a bulk assignment (which re-renders the whole tab) keeps whatever a
 // user has opened or closed open instead of silently resetting it.
 const openedYears = new Set();
+// Tracks per-year "show all subjects" state — only the first PAGE_SIZE
+// subjects in a year group render until the user clicks "Show N more".
+const expandedSubjectLists = new Set();
+const PAGE_SIZE = 4;
+// Tracks which subjects have their per-section override sub-row expanded
+// (only subjects with more than one section ever show the toggle).
+const openedSections = new Set();
 let facultyDeptById = {};
+let assignSearchQuery = '';
+let assignFilterType = '';
+let assignFilterStatus = '';
+
 // Lets a chair pick an existing faculty member from another department by
 // name+department instead of re-typing them as a new record (see boot()).
 function facOptionLabel(f){
@@ -24,6 +35,15 @@ function facOptionLabel(f){
   if(dept && dept!==myDept) label += ' ('+escapeHtml(dept)+')';
   if(avail) label += ' — ' + escapeHtml(avail);
   return label;
+}
+// Just the faculty <option> tags, no leading "— unassigned —" option —
+// used for the "mixed" dropdown state, where there is no single current
+// value to show as unassigned.
+function facOptionsOnly(selectedId){
+  return state.faculty.map(f=>`<option value="${f.id}" ${f.id===selectedId?'selected':''}>${facOptionLabel(f)}</option>`).join("");
+}
+function facultyOptionsHtml(selectedId){
+  return `<option value="">— unassigned —</option>` + facOptionsOnly(selectedId);
 }
 
 // Icon stat tiles mirroring the Home dashboard's .home-card style — counts
@@ -72,7 +92,22 @@ function renderAssignTab(){
   });
   const subjectIds = Object.keys(bySubject);
   document.getElementById('assignEmpty').classList.toggle('hidden', subjectIds.length>0);
-  const orderedSubjects = state.subjects.filter(s=>bySubject[s.id]);
+
+  const q = assignSearchQuery.trim().toLowerCase();
+  const allOffered = state.subjects.filter(s=>bySubject[s.id]);
+  const orderedSubjects = allOffered.filter(s=>{
+    if(q && !(s.code.toLowerCase().includes(q) || s.name.toLowerCase().includes(q))) return false;
+    if(assignFilterType && s.type!==assignFilterType) return false;
+    if(assignFilterStatus){
+      const secs = bySubject[s.id];
+      const allAssigned = secs.every(sec=>state.assignments[assignKey(sec.id, s.id)]);
+      if(assignFilterStatus==='assigned' && !allAssigned) return false;
+      if(assignFilterStatus==='unassigned' && allAssigned) return false;
+    }
+    return true;
+  });
+  const searchEmpty = document.getElementById('assignSearchEmpty');
+  if(searchEmpty) searchEmpty.classList.toggle('hidden', !((q || assignFilterType || assignFilterStatus) && orderedSubjects.length===0 && allOffered.length>0));
 
   const byYear = {};
   orderedSubjects.forEach(s=>{ (byYear[s.year] = byYear[s.year]||[]).push(s); });
@@ -95,39 +130,108 @@ function renderAssignTab(){
     });
     const body = det.querySelector('.group-body');
 
-    subjectsForYear.forEach(subj=>{
-      const sections = bySubject[subj.id];
-      const block = el(`<div class="subject-offer-block">
-        <div class="offer-header">
-          <div><strong>${escapeHtml(subj.code)}</strong> — ${escapeHtml(subj.name)} <span class="badge ${subj.type==='lab'?'badge-lab':'badge-lecture'}">${subj.type==='lab'?'Laboratory':'Lecture'}</span> ${subj.department?`<span class="muted" style="font-size:11px;">${escapeHtml(subj.department)}</span>`:''}</div>
-          <div class="row">
-            <span class="muted" style="font-size:12px;">Assign same instructor to all sections below:</span>
-            <select class="bulkAssign" data-subj="${subj.id}" style="min-width:180px;">
-              <option value="">— choose faculty —</option>
-              ${state.faculty.map(f=>`<option value="${f.id}">${facOptionLabel(f)}</option>`).join("")}
-            </select>
-          </div>
-        </div>
-        <div class="offer-rows"></div>
-      </div>`);
-      const rows = block.querySelector('.offer-rows');
-      sections.forEach(sec=>{
-        const currentFac = state.assignments[assignKey(sec.id, subj.id)] || "";
-        const row = el(`<div class="assign-row">
-          <div>${escapeHtml(sec.name)} <span class="muted" style="font-size:12px;">(${sec.studentCount} students)</span></div>
-          <select class="indivAssign" data-sec="${sec.id}" data-subj="${subj.id}" style="min-width:180px;">
-            <option value="">— unassigned —</option>
-            ${state.faculty.map(f=>`<option value="${f.id}" ${f.id===currentFac?'selected':''}>${facOptionLabel(f)}</option>`).join("")}
-          </select>
-        </div>`);
-        rows.appendChild(row);
-      });
-      body.appendChild(block);
-    });
+    const yearBulkRow = el(`<div class="row" style="justify-content:flex-end; margin-bottom:10px;">
+      <select class="yearBulkAssign hidden" data-year="${year}" style="min-width:220px;">
+        <option value="">— choose faculty —</option>
+        ${state.faculty.map(f=>`<option value="${f.id}">${facOptionLabel(f)}</option>`).join("")}
+      </select>
+      <button type="button" class="btn btn-sm btn-primary yearBulkBtn" data-year="${year}">Assign to All Subjects</button>
+    </div>`);
+    body.appendChild(yearBulkRow);
 
+    const table = el(`<table><thead><tr>
+      <th>Subject Code</th><th>Subject Name</th><th>Type</th><th>Sections</th><th style="min-width:200px;">Default Instructor</th><th style="width:70px;">Actions</th>
+    </tr></thead><tbody></tbody></table>`);
+    const tbody = table.querySelector('tbody');
+    const showAll = expandedSubjectLists.has(year);
+    const visibleSubjects = showAll ? subjectsForYear : subjectsForYear.slice(0, PAGE_SIZE);
+
+    visibleSubjects.forEach(subj=>{
+      const sections = bySubject[subj.id];
+      const assignedIds = sections.map(sec=>state.assignments[assignKey(sec.id, subj.id)] || "");
+      const allSame = assignedIds.every(id=>id===assignedIds[0]);
+      const sectionsOpen = openedSections.has(subj.id);
+      const row = el(`<tr>
+        <td><strong>${escapeHtml(subj.code)}</strong></td>
+        <td>${escapeHtml(subj.name)}</td>
+        <td><span class="badge ${subj.type==='lab'?'badge-lab':'badge-lecture'}">${subj.type==='lab'?'Laboratory':'Lecture'}</span></td>
+        <td>
+          ${sections.map(sec=>`<span class="chip" style="cursor:default;">${escapeHtml(sec.name)}</span>`).join('')}
+          ${sections.length>1 ? `<button type="button" class="btn btn-sm secToggleBtn${sectionsOpen?' expanded':''}" data-subj="${subj.id}" title="Set a different instructor per section">${icon('chevron')}</button>` : ''}
+        </td>
+        <td>
+          <select class="bulkAssign" data-subj="${subj.id}">
+            ${allSame ? facultyOptionsHtml(assignedIds[0]) : `<option value="" disabled selected>— mixed, see sections —</option>` + facOptionsOnly('')}
+          </select>
+        </td>
+        <td><button type="button" class="btn btn-sm btn-danger clearSubjBtn" data-subj="${subj.id}" title="Clear every instructor assigned to this subject">${icon('clear')}</button></td>
+      </tr>`);
+      tbody.appendChild(row);
+
+      if(sections.length>1){
+        const subRow = el(`<tr class="secExpandRow${sectionsOpen?'':' hidden'}" data-subj-expand="${subj.id}">
+          <td colspan="6">
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              ${sections.map(sec=>{
+                const currentFac = state.assignments[assignKey(sec.id, subj.id)] || "";
+                return `<div class="assign-row">
+                  <div>${escapeHtml(sec.name)} <span class="muted" style="font-size:12px;">(${sec.studentCount} students)</span></div>
+                  <select class="indivAssign" data-sec="${sec.id}" data-subj="${subj.id}" style="min-width:200px;">
+                    ${facultyOptionsHtml(currentFac)}
+                  </select>
+                </div>`;
+              }).join('')}
+            </div>
+          </td>
+        </tr>`);
+        tbody.appendChild(subRow);
+      }
+    });
+    table.appendChild(tbody);
+    body.appendChild(table);
+
+    if(!showAll && subjectsForYear.length>PAGE_SIZE){
+      const more = el(`<div class="show-more-link" data-year="${year}">Show ${subjectsForYear.length-PAGE_SIZE} more subject${subjectsForYear.length-PAGE_SIZE===1?'':'s'} ${icon('chevron')}</div>`);
+      body.appendChild(more);
+    }
     wrap.appendChild(det);
   });
 }
+
+document.getElementById('assignGroups').addEventListener('click', function(e){
+  const toggleBtn = e.target.closest('.secToggleBtn');
+  if(toggleBtn){
+    const subjId = toggleBtn.dataset.subj;
+    if(openedSections.has(subjId)) openedSections.delete(subjId);
+    else openedSections.add(subjId);
+    renderAssignTab();
+    return;
+  }
+  const clearBtn = e.target.closest('.clearSubjBtn');
+  if(clearBtn){
+    const subjId = clearBtn.dataset.subj;
+    state.sections.filter(sec=>sec.subjectIds.includes(subjId)).forEach(sec=>{
+      delete state.assignments[assignKey(sec.id, subjId)];
+    });
+    persistSharedData();
+    renderAssignTab();
+    return;
+  }
+  const yearBulkBtn = e.target.closest('.yearBulkBtn');
+  if(yearBulkBtn){
+    const sel = yearBulkBtn.previousElementSibling;
+    if(sel && sel.classList.contains('yearBulkAssign')){
+      sel.classList.toggle('hidden');
+    }
+    return;
+  }
+  const moreLink = e.target.closest('.show-more-link');
+  if(moreLink){
+    expandedSubjectLists.add(moreLink.dataset.year);
+    renderAssignTab();
+    return;
+  }
+});
 document.getElementById('assignGroups').addEventListener('change', function(e){
   if(e.target.classList.contains('bulkAssign')){
     const subjId = e.target.dataset.subj;
@@ -144,12 +248,42 @@ document.getElementById('assignGroups').addEventListener('change', function(e){
     if(e.target.value) state.assignments[key] = e.target.value;
     else delete state.assignments[key];
     persistSharedData();
+    renderAssignTab();
   }
+  if(e.target.classList.contains('yearBulkAssign')){
+    const year = e.target.dataset.year;
+    const facId = e.target.value;
+    if(!facId) return;
+    state.subjects.filter(s=>String(s.year)===String(year)).forEach(subj=>{
+      state.sections.filter(sec=>sec.subjectIds.includes(subj.id)).forEach(sec=>{
+        state.assignments[assignKey(sec.id, subj.id)] = facId;
+      });
+    });
+    persistSharedData();
+    renderAssignTab();
+  }
+});
+
+document.getElementById('assignSearchInput').addEventListener('input', function(e){
+  assignSearchQuery = e.target.value;
+  renderAssignTab();
+});
+document.getElementById('assignFiltersBtn').addEventListener('click', function(){
+  document.getElementById('assignFiltersBar').classList.toggle('hidden');
+});
+document.getElementById('assignFilterType').addEventListener('change', function(e){
+  assignFilterType = e.target.value;
+  renderAssignTab();
+});
+document.getElementById('assignFilterStatus').addEventListener('change', function(e){
+  assignFilterStatus = e.target.value;
+  renderAssignTab();
 });
 
 (async function boot(){
   const ok = await bootSession('assign');
   if(!ok) return;
+  renderPageTitle('Assign Instructors', [{label:'Home', href:'index.html'}, {label:'Assign Instructors'}]);
   // The registrar still manages the whole campus here in one merged view
   // (unchanged). A chair only sees their own department's sections/
   // subjects/faculty — plus any instructor they've linked in from another
