@@ -152,7 +152,14 @@ function renderGenWarnings(warnings){
 document.getElementById('generateBtn').addEventListener('click', function(){
   if(state.sections.length===0){ toast("Add sections with subjects first.", 'error'); return; }
   const scope = deptScope();
-  const warnings = generateSchedule(scope);
+  // See schedule.html's randomizeGenChk checkbox — checking it asks
+  // generateSchedule() to try a different, equally valid arrangement
+  // instead of the usual deterministic one. Every scheduling rule still
+  // applies exactly as before; only which of several EQUALLY GOOD options
+  // gets picked first can change.
+  const randomizeChk = document.getElementById('randomizeGenChk');
+  const randomize = !!(randomizeChk && randomizeChk.checked);
+  const warnings = generateSchedule(scope, randomize);
   renderScheduleTab();
   renderGenWarnings(warnings);
   if(scope) toast(`Generated ${scope}'s schedule — other departments' sessions weren't touched.`, 'success');
