@@ -302,3 +302,9 @@
   .quick-actions a.primary{ background:linear-gradient(180deg,#e7c766,var(--gold)); color:#241c04; border-color:#8a7228; }
   .quick-actions a svg{ width:17px; height:17px; flex:none; }
   .quick-actions a .chev{ margin-left:auto; width:15px; height:15px; opacity:0.6; }
+
+  /* ---- Static (non-link) stat tiles reusing .home-card/.home-card-icon on
+     Faculty/Subjects/Rooms/Assign Instructors/Generate Schedule — same
+     visual language as the Home dashboard tiles, just not clickable. ---- */
+  .home-card.static-card{ cursor:default; }
+  .home-card.static-card:hover{ border-color:var(--border); }
