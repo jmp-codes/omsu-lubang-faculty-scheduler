@@ -7,15 +7,16 @@ let editingSubjectId = null;
 let subjectSearchQuery = '';
 const SEMESTER_LABELS = {'1st':'1st Sem', '2nd':'2nd Sem', 'summer':'Summer', 'both':'Both Sems'};
 
-// Tracks year-level groups the user has manually collapsed. renderSubjectsGroups()
-// rebuilds every group from scratch after almost every action (edit/archive/
-// delete a subject, toggle "show archived", etc.), so without this a full
-// re-render would silently re-expand every group back open each time. A
-// year that isn't in this set renders open — and a year is explicitly
-// un-collapsed (see below) whenever a subject is added or edited into it,
-// so the newly added/changed row is immediately visible even if that
-// year's group was previously shut.
-const collapsedYears = new Set();
+// Tracks year-level groups the user has manually expanded. Every year
+// renders collapsed by default — with dozens of subjects across 4-5 year
+// levels, showing every row at once on page load is overwhelming, so a
+// year's table only appears once its header is clicked. A year is
+// explicitly opened (see below) whenever a subject is added or edited into
+// it, so the newly added/changed row is immediately visible, and
+// renderSubjectsGroups() (which rebuilds every group from scratch after
+// almost every action) keeps whatever a user has opened or closed open
+// across re-renders instead of silently resetting it.
+const openedYears = new Set();
 
 // Keeps the Curriculum field's suggestion list in sync with whatever
 // curriculum names are already in use, so the registrar/chair can reuse an
@@ -82,13 +83,13 @@ function renderSubjectsGroups(){
   visible.forEach(s=>{ (byYear[s.year] = byYear[s.year]||[]).push(s); });
   Object.keys(byYear).sort((a,b)=>a-b).forEach(year=>{
     const list = byYear[year].sort((a,b)=>a.code.localeCompare(b.code));
-    const isOpen = !collapsedYears.has(year);
+    const isOpen = openedYears.has(year);
     const det = el(`<details class="group"${isOpen?' open':''}><summary>${YEAR_LABELS[year]||('Year '+year)} <span class="count">${list.length} subject${list.length===1?'':'s'}</span></summary><div class="group-body"></div></details>`);
     // Remembers this group's open/closed state across the next re-render
-    // (see collapsedYears above) instead of always snapping back open.
+    // (see openedYears above) instead of always snapping back closed.
     det.addEventListener('toggle', function(){
-      if(det.open) collapsedYears.delete(year);
-      else collapsedYears.add(year);
+      if(det.open) openedYears.add(year);
+      else openedYears.delete(year);
     });
     const body = det.querySelector('.group-body');
     const table = el(`<table><thead><tr><th>Code</th><th>Name</th><th>Curriculum</th><th>Semester</th><th>Units</th><th>Type</th><th>Hours</th><th style="width:160px;">Actions</th></tr></thead><tbody></tbody></table>`);
@@ -222,7 +223,7 @@ document.getElementById('subjSaveBtn').addEventListener('click', function(){
   // Make sure the year this subject now belongs to is expanded, even if
   // that group was previously collapsed — otherwise the add/edit you just
   // made wouldn't visibly show up.
-  collapsedYears.delete(String(year));
+  openedYears.add(String(year));
   persistSubjects();
   resetSubjectForm();
   renderSubjectsGroups();
@@ -248,7 +249,7 @@ document.getElementById('subjBulkImportBtn').addEventListener('click', function(
     const preferSaturday = (cols[9]||'').trim().toLowerCase() === 'yes';
     const oneMeeting = (cols[10]||'').trim().toLowerCase() === 'yes';
     state.subjects.push({id: uid('subj'), code, name, year, units, type, lecHours, labHours, semester, curriculum, preferSaturday, oneMeeting, archived:false});
-    collapsedYears.delete(String(year)); // expand any year group these rows land in, even if it was collapsed
+    openedYears.add(String(year)); // expand any year group these rows land in, even if it was collapsed
     count++;
   });
   persistSubjects();
