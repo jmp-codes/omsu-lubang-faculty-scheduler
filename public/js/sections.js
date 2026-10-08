@@ -7,14 +7,14 @@ import {
 
 let sectionSearchQuery = '';
 
-// Tracks section cards the user has manually collapsed. renderSectionsList()
-// rebuilds every card from scratch after almost every action (add/remove a
-// subject, edit year/count, etc.), so without this, a full re-render would
-// silently re-expand every card back open each time. A section id that
-// isn't in this set renders open — which is also what makes a brand-new
-// section (or a duplicate) always appear expanded, even if every other
-// card on the page is currently collapsed.
-const collapsedSectionIds = new Set();
+// Tracks section cards the user has manually expanded. Every card renders
+// collapsed by default — a term with dozens of sections used to dump every
+// one of them open on page load — and renderSectionsList() (which rebuilds
+// every card from scratch after almost every action) keeps whatever a user
+// has opened or closed open across re-renders instead of resetting it. A
+// brand-new section or duplicate is explicitly added to this set at the
+// point it's created (see below), so it still appears expanded right away.
+const openedSectionIds = new Set();
 
 document.getElementById('secSearchInput').addEventListener('input', function(e){
   sectionSearchQuery = e.target.value;
@@ -26,7 +26,9 @@ document.getElementById('secSaveBtn').addEventListener('click', function(){
   if(!name){ toast("Please enter a section name.", 'error'); return; }
   const year = parseInt(document.getElementById('secYear').value,10);
   const studentCount = parseInt(document.getElementById('secCount').value,10) || 0;
-  state.sections.push({id: uid('sec'), name, year, studentCount, subjectIds:[]});
+  const newSec = {id: uid('sec'), name, year, studentCount, subjectIds:[]};
+  state.sections.push(newSec);
+  openedSectionIds.add(newSec.id);
   persistSections();
   document.getElementById('secName').value='';
   document.getElementById('secCount').value='';
@@ -84,7 +86,7 @@ function renderSectionsList(){
     const curriculaForYear = Array.from(new Set(
       state.subjects.filter(s=>s.year===sec.year && !s.archived && s.curriculum).map(s=>s.curriculum)
     )).sort();
-    const isOpen = !collapsedSectionIds.has(sec.id);
+    const isOpen = openedSectionIds.has(sec.id);
     const card = el(`<details class="section-card"${isOpen?' open':''}>
       <summary>
         <div><span class="title">${escapeHtml(sec.name)}</span><span class="meta pill-year" style="margin-left:8px;">${YEAR_LABELS[sec.year]}</span><span class="meta">${sec.studentCount} students</span></div>
@@ -131,10 +133,10 @@ function renderSectionsList(){
       </div>
     </details>`);
     // Remembers this card's open/closed state across the next re-render
-    // (see collapsedSectionIds above) instead of always snapping back open.
+    // (see openedSectionIds above) instead of always snapping back closed.
     card.addEventListener('toggle', function(){
-      if(card.open) collapsedSectionIds.delete(sec.id);
-      else collapsedSectionIds.add(sec.id);
+      if(card.open) openedSectionIds.add(sec.id);
+      else openedSectionIds.delete(sec.id);
     });
     wrap.appendChild(card);
   });
@@ -152,13 +154,14 @@ document.getElementById('sectionsList').addEventListener('click', function(e){
     if(!src) return;
     const copy = {id: uid('sec'), name: src.name+" (Copy)", year: src.year, studentCount: src.studentCount, subjectIds: src.subjectIds.slice()};
     state.sections.push(copy);
+    openedSectionIds.add(copy.id);
     persistSections();
     renderSectionsList(); renderSyncPanel();
   }
   if(delBtn){
     if(confirm("Delete this section?")){
       state.sections = state.sections.filter(s=>s.id!==delBtn.dataset.id);
-      collapsedSectionIds.delete(delBtn.dataset.id);
+      openedSectionIds.delete(delBtn.dataset.id);
       persistSections(); renderSectionsList(); renderSyncPanel();
     }
   }
