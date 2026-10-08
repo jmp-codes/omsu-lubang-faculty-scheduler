@@ -35,13 +35,21 @@
     <div class="home-grid" id="genStats" style="margin-top:12px;"></div>
   </div>
 
-  <div class="card" id="missingCard" style="display:none;">
+  <div class="card">
+    <div class="group view-tabs" id="scheduleSectionTabs">
+      <button class="btn btn-sm active" data-tab="weekly">Weekly Schedule</button>
+      <button class="btn btn-sm" data-tab="load">Faculty Load Summary</button>
+      <button class="btn btn-sm" data-tab="missing">Unscheduled Sessions (0)</button>
+    </div>
+  </div>
+
+  <div class="card tab-panel hidden" id="missingCard" data-panel="missing">
     <h2>Unscheduled Sessions</h2>
     <div class="hint">These sessions could not be auto-placed, or were removed manually. Place them by hand.</div>
     <div id="missingList"></div>
   </div>
 
-  <div class="card" id="facultyLoadCard" style="display:none;">
+  <div class="card tab-panel hidden" id="facultyLoadCard" data-panel="load">
     <h2>Faculty Load Summary</h2>
     <div class="hint">Teaching hours come from the generated schedule; admin/equivalent units are parsed from each faculty member's designation text (looks for a number followed by "unit(s)").</div>
     <table>
@@ -50,7 +58,7 @@
     </table>
   </div>
 
-  <div class="card">
+  <div class="card tab-panel" data-panel="weekly">
     <div class="toolbar">
       <h2 style="margin:0;">Weekly Schedule</h2>
       <div class="group view-tabs" id="viewTabs">
