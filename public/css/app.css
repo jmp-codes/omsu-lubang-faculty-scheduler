@@ -34,29 +34,55 @@
   }
   h1,h2,h3,h4{font-family:'Zilla Slab',Georgia,serif; margin:0 0 6px 0; font-weight:600; letter-spacing:0.2px;}
   header.app-header{
-    padding:22px 28px 16px 28px;
+    padding:20px 28px 10px 28px;
     border-bottom:1px solid var(--border);
     background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+    margin-left:252px;
   }
-  header.app-header h1{font-size:26px; color:#f3e6c4;}
+  header.app-header h1{font-size:24px; color:#f3e6c4;}
   header.app-header .sub{color:var(--muted); font-size:13px;}
   .brand-logo{ width:52px; height:52px; object-fit:contain; flex:none; }
-  nav.tabs{
-    display:flex; flex-wrap:wrap; gap:4px;
-    padding:0 28px; margin-top:14px;
+
+  /* ---- Left sidebar (replaces the old top-tabs nav; injected into
+     #chromeNav by renderChrome() in shared.js) — fixed position, so header/
+     main/footer get a matching margin-left instead of a wrapping flex
+     container (no page's HTML has to change for this). ---- */
+  #chromeNav{ position:fixed; left:0; top:0; bottom:0; width:252px; z-index:20; }
+  .sidebar{
+    height:100%; width:100%; display:flex; flex-direction:column;
+    background:var(--panel); border-right:1px solid var(--border);
+    padding:18px 14px; overflow-y:auto;
   }
-  nav.tabs a{
-    background:transparent; border:1px solid transparent; border-bottom:none;
-    color:var(--muted); padding:10px 16px; font-family:'Zilla Slab',serif; font-size:14.5px;
-    font-weight:600; cursor:pointer; border-radius:8px 8px 0 0; letter-spacing:0.3px;
-    text-decoration:none; display:inline-block;
+  .sidebar-brand{
+    display:flex; align-items:center; gap:10px; padding:2px 6px 16px 6px;
+    border-bottom:1px solid var(--border-soft); margin-bottom:12px;
   }
-  nav.tabs a:hover{ color:var(--text); background:rgba(255,255,255,0.03); }
-  nav.tabs a.active{
-    color:#f3e6c4; background:var(--panel); border-color:var(--border);
-    box-shadow: 0 -2px 0 var(--gold) inset;
+  .sidebar-logo{ width:38px; height:38px; object-fit:contain; flex:none; }
+  .sidebar-title{ font-family:'Zilla Slab',serif; font-weight:700; color:#f3e6c4; font-size:14.5px; line-height:1.2; }
+  .sidebar-subtitle{ font-size:11px; color:var(--text); font-weight:600; }
+  .sidebar-org{ font-size:9.5px; color:var(--muted-2); margin-top:3px; line-height:1.3; max-width:150px; }
+  .sidebar-nav{ display:flex; flex-direction:column; gap:2px; flex:1; }
+  .sidebar-nav a{
+    display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:8px;
+    color:var(--muted); text-decoration:none; font-weight:600; font-size:13.5px;
   }
-  main{ padding:20px 28px 40px 28px; max-width:1400px; margin:0 auto; }
+  .sidebar-nav a svg{ width:17px; height:17px; flex:none; opacity:0.8; }
+  .sidebar-nav a:hover{ background:rgba(255,255,255,0.04); color:var(--text); }
+  .sidebar-nav a.active{ background:var(--gold-soft); color:var(--gold); }
+  .sidebar-nav a.active svg{ opacity:1; }
+  .sidebar-foot{
+    font-size:10px; color:var(--muted-2); text-align:center; letter-spacing:0.2px;
+    padding-top:14px; margin-top:10px; border-top:1px solid var(--border-soft);
+  }
+  @media (max-width: 880px){
+    #chromeNav{ position:static; width:auto; height:auto; }
+    .sidebar{ border-right:none; border-bottom:1px solid var(--border); }
+    .sidebar-nav{ flex-direction:row; flex-wrap:wrap; }
+    .sidebar-foot{ display:none; }
+    header.app-header, main, .app-footer-wrap{ margin-left:0 !important; }
+  }
+
+  main{ padding:20px 28px 40px 28px; max-width:1400px; margin-left:252px; }
   .tab-panel{ display:block; }
   .home-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(220px,1fr)); gap:14px; margin-top:6px; }
   .home-card{
@@ -178,7 +204,9 @@
   .hidden{ display:none !important; }
   ::-webkit-scrollbar{ height:10px; width:10px; }
   ::-webkit-scrollbar-thumb{ background:#26314a; border-radius:10px; }
+  #chromeFooter{ margin-left:252px; }
   .footer-note{ text-align:center; color:var(--muted-2); font-size:11.5px; margin-top:30px; }
+  @media (max-width: 880px){ #chromeFooter{ margin-left:0; } }
   .miss-list{ list-style:none; padding:0; margin:0; }
   .miss-list li{ display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border-bottom:1px solid var(--border-soft); font-size:13px; }
   .stat-row{ display:flex; gap:14px; flex-wrap:wrap; margin-bottom:6px; }
@@ -213,3 +241,64 @@
   .block{ position:relative; }
   .block.restricted::after{ content:""; position:absolute; top:4px; right:4px; width:7px; height:7px; border-radius:50%;
     background:var(--gold); box-shadow:0 0 0 2px rgba(0,0,0,0.25); }
+
+  /* ============================================================
+     Home dashboard — hero banner, icon'd stat tiles (home-card extended),
+     two-column layout, Scheduling Status checklist, Quick Actions list.
+     Appended rather than edited in place to keep this one clearly-scoped
+     diff; later rules here intentionally override the plainer .home-card
+     base above for the icon layout. No new CSS variables — reuses the
+     existing navy/gold palette plus a couple of literal accent rgba()s,
+     same pattern as the existing .pill-year rule.
+     ============================================================ */
+  .home-card{ display:flex; gap:13px; align-items:flex-start; }
+  .home-card-icon{
+    width:40px; height:40px; border-radius:10px; flex:none;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .home-card-icon svg{ width:19px; height:19px; }
+  .home-card-icon.c-blue{ background:rgba(91,141,239,0.15); color:var(--blue); }
+  .home-card-icon.c-gold{ background:var(--gold-soft); color:var(--gold); }
+  .home-card-icon.c-teal{ background:var(--teal-soft); color:var(--teal); }
+  .home-card-icon.c-purple{ background:rgba(167,139,250,0.15); color:#a78bfa; }
+
+  .hero-banner{
+    border-radius:14px; padding:26px 28px; margin-bottom:18px; position:relative; overflow:hidden;
+    background:linear-gradient(135deg, #1a2550 0%, #0f1729 55%, #140f24 100%);
+    border:1px solid var(--border);
+  }
+  .hero-banner::after{
+    content:""; position:absolute; inset:0; pointer-events:none;
+    background:radial-gradient(420px 220px at 85% 0%, rgba(232,189,63,0.14), transparent 70%);
+  }
+  .hero-banner .eyebrow{ color:var(--muted); font-size:13px; margin-bottom:2px; position:relative; }
+  .hero-banner h2{ font-size:27px; color:#f3e6c4; margin-bottom:5px; position:relative; }
+  .hero-banner .sub{ color:var(--muted); font-size:13.5px; max-width:560px; position:relative; }
+
+  .dashboard-grid{ display:grid; grid-template-columns:2fr 1fr; gap:0 18px; align-items:start; }
+  .dashboard-main, .dashboard-side{ min-width:0; }
+  @media (max-width: 980px){ .dashboard-grid{ grid-template-columns:1fr; } }
+
+  .status-overall{ display:flex; align-items:center; gap:14px; margin-bottom:12px; }
+  .progress-track{ flex:1; height:8px; border-radius:6px; background:var(--panel-2); overflow:hidden; }
+  .progress-fill{ height:100%; background:linear-gradient(90deg,#e7c766,var(--gold)); border-radius:6px; }
+  .status-pct{ font-family:'Zilla Slab',serif; font-weight:700; color:var(--gold); font-size:15px; flex:none; }
+  .status-list{ display:flex; flex-direction:column; }
+  .status-item{ display:flex; align-items:center; gap:10px; padding:9px 2px; border-bottom:1px solid var(--border-soft); font-size:13.5px; }
+  .status-item:last-child{ border-bottom:none; }
+  .status-item svg{ width:18px; height:18px; flex:none; }
+  .status-item.ok svg{ color:#4ade80; }
+  .status-item.warn svg{ color:var(--gold); }
+  .status-item .lbl{ flex:1; }
+  .status-item .frac{ color:var(--muted); font-variant-numeric:tabular-nums; font-weight:600; font-size:12.5px; white-space:nowrap; }
+
+  .quick-actions{ display:flex; flex-direction:column; gap:7px; }
+  .quick-actions a{
+    display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:9px;
+    text-decoration:none; color:var(--text); border:1px solid var(--border); background:var(--panel-2);
+    font-weight:600; font-size:13.5px;
+  }
+  .quick-actions a:hover{ border-color:var(--gold); }
+  .quick-actions a.primary{ background:linear-gradient(180deg,#e7c766,var(--gold)); color:#241c04; border-color:#8a7228; }
+  .quick-actions a svg{ width:17px; height:17px; flex:none; }
+  .quick-actions a .chev{ margin-left:auto; width:15px; height:15px; opacity:0.6; }
