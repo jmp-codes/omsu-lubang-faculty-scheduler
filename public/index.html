@@ -15,11 +15,29 @@
 <div id="chromeNav"></div>
 
 <main>
-  <div class="card">
-    <h2>Welcome</h2>
-    <div class="hint">This tool manages faculty, subjects, rooms and sections, then auto-generates a Mon–Sat weekly schedule with no conflicts. Each section below is its own page — data is shared between them automatically.</div>
-    <div id="homeStatusBanner"></div>
-    <div class="home-grid" id="homeGrid"></div>
+  <div id="homeHero"></div>
+
+  <div class="home-grid" id="homeStatTiles"></div>
+
+  <div class="dashboard-grid">
+    <div class="dashboard-main">
+      <div class="card">
+        <h2>Scheduling Status</h2>
+        <div class="hint">How ready this term's data is for Generate Schedule.</div>
+        <div id="schedulingStatus"></div>
+      </div>
+      <div class="card">
+        <h2>Weekly Schedule Preview</h2>
+        <div class="hint">A quick look at what's already placed — see the full, filterable weekly grid on Generate Schedule.</div>
+        <div id="weeklyPreview"></div>
+      </div>
+    </div>
+    <div class="dashboard-side">
+      <div class="card">
+        <h2>Quick Actions</h2>
+        <div id="quickActions"></div>
+      </div>
+    </div>
   </div>
 
   <div class="card">
