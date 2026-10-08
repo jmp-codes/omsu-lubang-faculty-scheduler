@@ -1,6 +1,6 @@
 import {
   state, uid, el, escapeHtml, icon, subjectById, YEAR_LABELS, parseDelimitedText,
-  bootSession, wireDeptBar, loadSubjects, persistSubjects, loadSections, saveSections, toast
+  bootSession, wireDeptBar, wireTabs, loadSubjects, persistSubjects, loadSections, saveSections, toast
 } from './shared.js';
 
 let editingSubjectId = null;
@@ -266,5 +266,6 @@ async function reload(){
   const ok = await bootSession('subjects');
   if(!ok) return;
   wireDeptBar(reload);
+  wireTabs('subjectsFormTabs', '[data-panel]');
   await reload();
 })();
