@@ -1,7 +1,7 @@
 import {
   state, uid, el, escapeHtml, icon, timeRangeLabel, byId,
   DAYS, DAY_START, DAY_END, hourLabel, parseDelimitedText,
-  bootSession, wireDeptBar, loadFaculty, persistFaculty,
+  bootSession, wireDeptBar, wireTabs, loadFaculty, persistFaculty,
   session, loadFacultyDirectory, fetchFacultyAll, describeAvailability, toast
 } from './shared.js';
 
@@ -399,5 +399,6 @@ async function reload(){
   const ok = await bootSession('faculty');
   if(!ok) return;
   wireDeptBar(reload);
+  wireTabs('facultyFormTabs', '[data-panel]');
   await reload();
 })();
