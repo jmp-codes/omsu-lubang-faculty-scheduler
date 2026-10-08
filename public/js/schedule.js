@@ -223,10 +223,13 @@ function renderGenStats(){
     + '</div>').join('');
 }
 
-// Tracks which section groups below have been manually collapsed, so a
-// re-render (e.g. after placing one session) doesn't snap every group back
-// open — same pattern as subjects.js/assign.js's collapsedYears.
-let collapsedMissingSections = new Set();
+// Tracks which section groups below have been manually expanded. Renders
+// collapsed by default — a term with 20-30 unscheduled sessions used to
+// dump every section's group open on page load — and a re-render (e.g.
+// after placing one session) keeps whatever a user has opened or closed
+// open instead of snapping it back. Same pattern as subjects.js/assign.js/
+// sections.js's openedYears/openedSectionIds.
+let openedMissingSections = new Set();
 
 function renderMissingList(){
   // Nothing is placed yet for an unscheduled session, so there's no
@@ -254,7 +257,7 @@ function renderMissingList(){
   const groups = Array.from(bySection.values()).sort((a,b)=> a.sec.name.localeCompare(b.sec.name));
 
   groups.forEach(g=>{
-    const isOpen = !collapsedMissingSections.has(g.sec.id);
+    const isOpen = openedMissingSections.has(g.sec.id);
     // Build it closed and set .open as a property below, AFTER it's in the
     // live document — baking `open` into the HTML string here and letting
     // the browser parse it from a detached template can get silently
@@ -265,8 +268,8 @@ function renderMissingList(){
       <div class="group-body"><ul class="miss-list"></ul></div>
     </details>`);
     det.addEventListener('toggle', function(){
-      if(det.open) collapsedMissingSections.delete(g.sec.id);
-      else collapsedMissingSections.add(g.sec.id);
+      if(det.open) openedMissingSections.add(g.sec.id);
+      else openedMissingSections.delete(g.sec.id);
     });
     const ul = det.querySelector('.miss-list');
     // A chair can see every department's unscheduled sessions here, for
