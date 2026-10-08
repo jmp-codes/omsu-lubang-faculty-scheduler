@@ -1158,6 +1158,23 @@ export function icon(name, cls){
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${cls||''}">${ICON_PATHS[name]||''}</svg>`;
 }
 
+// Generic tab-bar wiring reused by Faculty/Subjects/Generate Schedule's
+// in-page sub-navigation (Add/Bulk Import/etc.) — clicking a
+// [data-tab] button in the bar toggles .active on the buttons and
+// toggles .hidden on every element matched by panelSelector whose
+// data-panel matches the clicked button's data-tab.
+export function wireTabs(tabBarId, panelSelector){
+  const bar = document.getElementById(tabBarId);
+  if(!bar) return;
+  bar.addEventListener('click', function(e){
+    const btn = e.target.closest('button[data-tab]');
+    if(!btn) return;
+    const key = btn.dataset.tab;
+    bar.querySelectorAll('button[data-tab]').forEach(b=> b.classList.toggle('active', b===btn));
+    document.querySelectorAll(panelSelector).forEach(p=> p.classList.toggle('hidden', p.dataset.panel!==key));
+  });
+}
+
 const NAV_ITEMS = [
   {key:'home', href:'index.html', label:'Home', icon:'home', roles:['registrar','chair']},
   {key:'faculty', href:'faculty.html', label:'Faculty', icon:'faculty', roles:['registrar','chair']},
