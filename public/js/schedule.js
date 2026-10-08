@@ -4,7 +4,7 @@ import {
   yearsInUse, downloadTextFile, toCsv, hasConflict, generateSchedule, expectedBlockIds, computeMissing,
   clearSchedule, revertSchedule, hasDeptScheduleBackup, parseAdminUnits, rescheduleBlockWithCascade,
   bootSession, loadFacultyAll, loadSubjectsAll, loadSectionsAll, loadSyncPrefAll,
-  loadSharedData, persistSharedData, describeAvailability, toast, dedupeById
+  loadSharedData, persistSharedData, describeAvailability, toast, dedupeById, wireTabs
 } from './shared.js';
 
 // Every write-side action on this page (Generate/Clear/Revert, manual
@@ -166,15 +166,16 @@ document.getElementById('revertScheduleBtn').addEventListener('click', function(
 
 /* ---- Faculty load summary ---- */
 function renderFacultyLoad(){
-  const card = document.getElementById('facultyLoadCard');
   const tbody = document.getElementById('facultyLoadBody');
   // state.faculty is the full cross-department merge — restrict this to
   // the viewer's own roster (native + linked) so a chair doesn't get a load
   // report on every instructor on campus, only their own.
   const visibleFaculty = dedupeById(session.isRegistrar ? state.faculty : state.faculty.filter(f=>myFacultyIds().has(f.id)));
-  if(visibleFaculty.length===0){ card.style.display='none'; return; }
-  card.style.display='';
   tbody.innerHTML = '';
+  if(visibleFaculty.length===0){
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-msg">No faculty to show.</td></tr>';
+    return;
+  }
   visibleFaculty.slice().sort((a,b)=>a.name.localeCompare(b.name)).forEach(f=>{
     const teachingHrs = state.schedule.filter(b=>b.facultyId===f.id).reduce((s,b)=>s+b.duration,0);
     const externalHrs = (f.externalBusy||[]).reduce((s,b)=>s+b.duration,0);
@@ -232,11 +233,14 @@ function renderMissingList(){
   // resource conflict for a chair to coordinate around by seeing another
   // department's — restrict this to the viewer's own department.
   const missing = session.isRegistrar ? computeMissing() : computeMissing().filter(m=>m.sec.department===session.department);
-  const card = document.getElementById('missingCard');
   const list = document.getElementById('missingList');
-  card.style.display = missing.length ? '' : 'none';
+  const tabBtn = document.querySelector('#scheduleSectionTabs button[data-tab="missing"]');
+  if(tabBtn) tabBtn.textContent = 'Unscheduled Sessions (' + missing.length + ')';
   list.innerHTML = '';
-  if(missing.length === 0) return;
+  if(missing.length === 0){
+    list.innerHTML = "<div class='empty-msg'>No unscheduled sessions — everything's placed.</div>";
+    return;
+  }
 
   // Group by section instead of one long flat list — a term with lots of
   // unscheduled sessions was turning this card into a scroll of 20-30 rows
@@ -674,6 +678,7 @@ function openEditModal(opts){
   const ok = await bootSession('schedule');
   if(!ok) return;
   await Promise.all([loadFacultyAll(), loadSubjectsAll(), loadSectionsAll(), loadSyncPrefAll(), loadSharedData()]);
+  wireTabs('scheduleSectionTabs', '[data-panel]');
   renderYearPrefPanel();
   renderScheduleTab();
 })();
