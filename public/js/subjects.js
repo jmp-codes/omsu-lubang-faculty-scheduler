@@ -1,5 +1,5 @@
 import {
-  state, uid, el, escapeHtml, subjectById, YEAR_LABELS, parseDelimitedText,
+  state, uid, el, escapeHtml, icon, subjectById, YEAR_LABELS, parseDelimitedText,
   bootSession, wireDeptBar, loadSubjects, persistSubjects, loadSections, saveSections, toast
 } from './shared.js';
 
@@ -36,7 +36,36 @@ document.getElementById('subjType').addEventListener('change', function(){
   }
 });
 
+// Icon stat tiles mirroring the Home dashboard's .home-card style. The
+// data model has no "elective" flag to reproduce a Core/Elective split
+// honestly, so this uses the real Lecture/Laboratory type split instead,
+// plus how many distinct curricula are currently in use.
+function renderSubjectsStats(){
+  const mount = document.getElementById('subjectsStatTiles');
+  if(!mount) return;
+  const active = state.subjects.filter(s=>!s.archived);
+  const total = active.length;
+  const withLab = active.filter(s=>s.type==='lab').length;
+  const lectureOnly = total - withLab;
+  const curricula = new Set(active.map(s=>s.curriculum).filter(Boolean)).size;
+  const tiles = [
+    {icn:'subjects', cls:'c-blue', n:total, label:'Total Subjects', sub:'active subjects'},
+    {icn:'sections', cls:'c-teal', n:withLab, label:'With Laboratory', sub:'lecture + lab'},
+    {icn:'check', cls:'c-gold', n:lectureOnly, label:'Lecture Only', sub:'lecture-only subjects'},
+    {icn:'info', cls:'c-purple', n:curricula, label:'Curricula in Use', sub:'distinct curricula'}
+  ];
+  mount.innerHTML = tiles.map(t=>'<div class="home-card static-card">'
+    + '<div class="home-card-icon '+t.cls+'">'+icon(t.icn)+'</div>'
+    + '<div>'
+    + '<div class="d" style="margin-bottom:2px;">'+escapeHtml(t.label)+'</div>'
+    + '<div class="n">'+t.n+'</div>'
+    + '<div class="d">'+escapeHtml(t.sub)+'</div>'
+    + '</div>'
+    + '</div>').join('');
+}
+
 function renderSubjectsGroups(){
+  renderSubjectsStats();
   const wrap = document.getElementById('subjectsGroups');
   wrap.innerHTML = "";
   document.getElementById('subjectsEmpty').classList.toggle('hidden', state.subjects.length>0);
