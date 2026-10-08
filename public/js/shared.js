@@ -24,6 +24,29 @@ export const DEPARTMENTS = ["BSIT","BSBA-OM","BEEd"];
 
 export function uid(prefix){ return prefix + "_" + Math.random().toString(36).slice(2,9) + Date.now().toString(36).slice(-4); }
 
+// Fisher-Yates shuffle, used only to randomize TIES when "Try a different
+// valid arrangement" is checked on the Generate Schedule page — see
+// randomizePass below. Never mutates its input.
+function shuffle(arr){
+  const a = arr.slice();
+  for(let i=a.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    const tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+  }
+  return a;
+}
+
+// True for the duration of one generateSchedule() call when its caller
+// asked to randomize ties (see generateSchedule's randomize argument
+// below) — false the rest of the time, including during drag-and-drop
+// reschedule and manual placement, which must stay fully deterministic.
+// daysByLoad/roomCandidatesFor/placeOnDayPair all read this flag to decide
+// whether to shuffle before their stable sort; every hard rule they
+// enforce (capacity, department ownership, conflicts, the break limit,
+// lunch) is completely unaffected by it — this only changes which of
+// several EQUALLY VALID candidates gets tried first.
+let randomizePass = false;
+
 export function defaultState(){
   return {
     faculty: [],     // {id,name,rank,qualifications:[],designations:[],externalBusy:[{id,day,start,duration,label}],department}
@@ -510,7 +533,13 @@ function daysByLoad(preferDay){
   const load = {};
   DAYS.forEach(d=>{ load[d] = 0; });
   state.schedule.forEach(b=>{ load[b.day] = (load[b.day]||0) + b.duration; });
-  const ordered = DAYS.slice().sort((a,b)=> load[a]-load[b] || DAYS.indexOf(a)-DAYS.indexOf(b));
+  // Array#sort is stable, so shuffling first and then sorting by load only
+  // randomizes which day goes first AMONG DAYS WITH EQUAL LOAD — a day
+  // that's genuinely less busy is still always tried before a busier one.
+  // Off a randomized pass, this is byte-for-byte the old fixed Mon-Sat
+  // tiebreak.
+  const base = randomizePass ? shuffle(DAYS) : DAYS.slice();
+  const ordered = base.sort((a,b)=> load[a]-load[b] || (randomizePass ? 0 : DAYS.indexOf(a)-DAYS.indexOf(b)));
   if(preferDay && ordered.includes(preferDay)){
     return [preferDay, ...ordered.filter(d=>d!==preferDay)];
   }
@@ -537,7 +566,12 @@ function roomCandidatesFor(segType, sec){
   // Schedule from ever placing one department's class in another
   // department's dedicated room. A Shared/Any-Department room (no
   // department set) remains a candidate for every section, same as before.
-  const candidates = state.rooms.filter(r=>r.type===segType && (!r.capacity || r.capacity>=sec.studentCount) && (!r.department || r.department===sec.department));
+  const matches = state.rooms.filter(r=>r.type===segType && (!r.capacity || r.capacity>=sec.studentCount) && (!r.department || r.department===sec.department));
+  // Only reorders rooms that TIE on capacity (and, for lecture, on
+  // home-room status) when a randomized pass is running — every eligible
+  // room is still exactly the same set as before; see roomCandidatesFor's
+  // callers and randomizePass above.
+  const candidates = randomizePass ? shuffle(matches) : matches;
   if(segType === 'lecture'){
     const homeIds = new Set(homeRoomIdsFor(sec));
     if(homeIds.size){
@@ -668,7 +702,8 @@ function placeOnDayPair(sec, subj, facultyId, segType, partHours, baseBlockId){
   const load = {};
   DAYS.forEach(d=>{ load[d] = 0; });
   state.schedule.forEach(b=>{ load[b.day] = (load[b.day]||0) + b.duration; });
-  const pairs = DAY_PAIRS.slice().sort((a,b)=> (load[a[0]]+load[a[1]]) - (load[b[0]]+load[b[1]]));
+  const basePairs = randomizePass ? shuffle(DAY_PAIRS) : DAY_PAIRS.slice();
+  const pairs = basePairs.sort((a,b)=> (load[a[0]]+load[a[1]]) - (load[b[0]]+load[b[1]]));
   for(const pair of pairs){
     const outsidePair = new Set(DAYS.filter(d=>!pair.includes(d)));
     const blockId1 = baseBlockId + '#1', blockId2 = baseBlockId + '#2';
@@ -969,54 +1004,74 @@ export function clearSchedule(deptScope){
   persistSharedData();
 }
 
-export function generateSchedule(deptScope){
-  backupSchedule(deptScope);
-  if(deptScope){
-    state.schedule = state.schedule.filter(b=> blockSectionDept(b)!==deptScope);
-  } else {
-    state.schedule = [];
-  }
-  const warnings = [];
-
-  const scopedSections = deptScope ? state.sections.filter(sec=>sec.department===deptScope) : state.sections;
-  const syncGroups = {};
-  scopedSections.forEach(sec=>{
-    sec.subjectIds.forEach(subjId=>{
-      const key = syncKey(sec.year, subjId);
-      (syncGroups[key] = syncGroups[key]||{year:sec.year, subjectId:subjId, sections:[]}).sections.push(sec);
-    });
-  });
-  const handledOfferings = new Set();
-  Object.values(syncGroups).forEach(g=>{
-    if(g.sections.length>=2 && state.syncPref[syncKey(g.year,g.subjectId)]){
-      trySyncGroup(g.year, g.subjectId, g.sections, warnings);
-      g.sections.forEach(sec=> handledOfferings.add(assignKey(sec.id,g.subjectId)));
+// `randomize`, when true, tries a different equally-valid arrangement each
+// time you generate — it only shuffles which of several EQUALLY GOOD
+// offerings/rooms/days is tried first (see randomizePass, shuffle() and
+// their use in daysByLoad/roomCandidatesFor/placeOnDayPair above); every
+// hard rule (conflicts, lunch, the continuous-hours break limit, room
+// capacity/department, the Mon/Wed-Tue/Thu day-pair split) is checked by
+// hasConflict/wouldExceedBreakLimit/findRoomFor exactly as before and is
+// never relaxed. Omit it (or pass false) for the original deterministic
+// behavior.
+export function generateSchedule(deptScope, randomize){
+  randomizePass = !!randomize;
+  try {
+    backupSchedule(deptScope);
+    if(deptScope){
+      state.schedule = state.schedule.filter(b=> blockSectionDept(b)!==deptScope);
+    } else {
+      state.schedule = [];
     }
-  });
+    const warnings = [];
 
-  let offerings = buildOfferings().filter(o=>!handledOfferings.has(assignKey(o.section.id,o.subject.id)));
-  if(deptScope) offerings = offerings.filter(o=> o.section.department===deptScope);
-  offerings.sort((a,b)=> b.totalHours - a.totalHours);
-  offerings.forEach(o=>{
-    if(!o.facultyId){
-      warnings.push(`${o.subject.code} (${o.section.name}) has no instructor assigned — skipped.`);
-      return;
+    const scopedSections = deptScope ? state.sections.filter(sec=>sec.department===deptScope) : state.sections;
+    const syncGroups = {};
+    scopedSections.forEach(sec=>{
+      sec.subjectIds.forEach(subjId=>{
+        const key = syncKey(sec.year, subjId);
+        (syncGroups[key] = syncGroups[key]||{year:sec.year, subjectId:subjId, sections:[]}).sections.push(sec);
+      });
+    });
+    const handledOfferings = new Set();
+    const groups = randomizePass ? shuffle(Object.values(syncGroups)) : Object.values(syncGroups);
+    groups.forEach(g=>{
+      if(g.sections.length>=2 && state.syncPref[syncKey(g.year,g.subjectId)]){
+        trySyncGroup(g.year, g.subjectId, g.sections, warnings);
+        g.sections.forEach(sec=> handledOfferings.add(assignKey(sec.id,g.subjectId)));
+      }
+    });
+
+    let offerings = buildOfferings().filter(o=>!handledOfferings.has(assignKey(o.section.id,o.subject.id)));
+    if(deptScope) offerings = offerings.filter(o=> o.section.department===deptScope);
+    // Stable sort, so shuffling first only randomizes ties — offerings
+    // with MORE total hours are still always placed before ones with
+    // fewer, exactly as before (that ordering is what keeps the week from
+    // fragmenting).
+    if(randomizePass) offerings = shuffle(offerings);
+    offerings.sort((a,b)=> b.totalHours - a.totalHours);
+    offerings.forEach(o=>{
+      if(!o.facultyId){
+        warnings.push(`${o.subject.code} (${o.section.name}) has no instructor assigned — skipped.`);
+        return;
+      }
+      const segs = o.segments.slice().sort((a,b)=>b.hours-a.hours);
+      segs.forEach(seg=>{
+        tryPlaceSegment(o.section, o.subject, o.facultyId, seg.segType, seg.hours, warnings);
+      });
+    });
+
+    if(deptScope){
+      Object.keys(state.manualRemoved).forEach(k=>{
+        if(blockIdSectionDept(k)===deptScope) delete state.manualRemoved[k];
+      });
+    } else {
+      state.manualRemoved = {};
     }
-    const segs = o.segments.slice().sort((a,b)=>b.hours-a.hours);
-    segs.forEach(seg=>{
-      tryPlaceSegment(o.section, o.subject, o.facultyId, seg.segType, seg.hours, warnings);
-    });
-  });
-
-  if(deptScope){
-    Object.keys(state.manualRemoved).forEach(k=>{
-      if(blockIdSectionDept(k)===deptScope) delete state.manualRemoved[k];
-    });
-  } else {
-    state.manualRemoved = {};
+    persistSharedData();
+    return warnings;
+  } finally {
+    randomizePass = false;
   }
-  persistSharedData();
-  return warnings;
 }
 
 export function expectedBlockIds(){
