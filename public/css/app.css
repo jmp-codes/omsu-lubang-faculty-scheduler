@@ -311,3 +311,27 @@
      visual language as the Home dashboard tiles, just not clickable. ---- */
   .home-card.static-card{ cursor:default; }
   .home-card.static-card:hover{ border-color:var(--border); }
+
+  /* ---- Page-specific header title: renderPageTitle() (shared.js) swaps
+     the header's default "Faculty Scheduler" subtitle line for this
+     "Home > ... > Current Page" trail — same slot, different content. ---- */
+  .breadcrumb{ color:var(--muted); font-size:13px; margin-top:1px; }
+  .breadcrumb a{ color:var(--muted); text-decoration:none; }
+  .breadcrumb a:hover{ color:var(--gold); }
+  .breadcrumb .sep{ margin:0 5px; opacity:0.5; }
+  .breadcrumb .current{ color:var(--text); }
+
+  /* ---- Icons inside ordinary .btn buttons (header's Export Data/Log Out,
+     Assign Instructors' Filters, and any icon-only action button like the
+     per-subject Clear or the per-row section-expand chevron). ---- */
+  .btn svg{ width:14px; height:14px; vertical-align:-2px; margin-right:4px; flex:none; }
+  .secToggleBtn svg{ margin-right:0; transition:transform .15s ease; }
+  .secToggleBtn.expanded svg{ transform:rotate(90deg); }
+  .clearSubjBtn svg{ margin-right:0; }
+
+  /* ---- "Show N more" row under a year group's subject table (Assign
+     Instructors) — same idea as the year-level pagination, one level down:
+     only the first few subjects in an expanded year show by default. ---- */
+  .show-more-link{ cursor:pointer; color:var(--muted); font-size:12.5px; padding:10px 4px 2px 4px; text-align:left; }
+  .show-more-link:hover{ color:var(--gold); }
+  .show-more-link svg{ width:13px; height:13px; vertical-align:-2px; margin-left:2px; transform:rotate(90deg); }
