@@ -84,7 +84,7 @@
 
   main{ padding:20px 28px 40px 28px; margin-left:252px; }
   .tab-panel{ display:block; }
-  .home-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(220px,1fr)); gap:14px; margin-top:6px; }
+  .home-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(220px,1fr)); gap:14px; margin-top:6px; margin-bottom:18px; }
   .home-card{
     background:var(--panel-2); border:1px solid var(--border); border-radius:10px; padding:16px 18px;
     text-decoration:none; color:var(--text); display:block; transition:border-color .15s;
