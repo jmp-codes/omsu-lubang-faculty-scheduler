@@ -10,10 +10,6 @@ import {
 // and a bulk assignment (which re-renders the whole tab) keeps whatever a
 // user has opened or closed open instead of silently resetting it.
 const openedYears = new Set();
-// Tracks per-year "show all subjects" state — only the first PAGE_SIZE
-// subjects in a year group render until the user clicks "Show N more".
-const expandedSubjectLists = new Set();
-const PAGE_SIZE = 4;
 // Tracks which subjects have their per-section override sub-row expanded
 // (only subjects with more than one section ever show the toggle).
 const openedSections = new Set();
@@ -130,23 +126,12 @@ function renderAssignTab(){
     });
     const body = det.querySelector('.group-body');
 
-    const yearBulkRow = el(`<div class="row" style="justify-content:flex-end; margin-bottom:10px;">
-      <select class="yearBulkAssign hidden" data-year="${year}" style="min-width:220px;">
-        <option value="">— choose faculty —</option>
-        ${state.faculty.map(f=>`<option value="${f.id}">${facOptionLabel(f)}</option>`).join("")}
-      </select>
-      <button type="button" class="btn btn-sm btn-primary yearBulkBtn" data-year="${year}">Assign to All Subjects</button>
-    </div>`);
-    body.appendChild(yearBulkRow);
-
     const table = el(`<table><thead><tr>
       <th>Subject Code</th><th>Subject Name</th><th>Type</th><th>Sections</th><th style="min-width:200px;">Default Instructor</th><th style="width:70px;">Actions</th>
     </tr></thead><tbody></tbody></table>`);
     const tbody = table.querySelector('tbody');
-    const showAll = expandedSubjectLists.has(year);
-    const visibleSubjects = showAll ? subjectsForYear : subjectsForYear.slice(0, PAGE_SIZE);
 
-    visibleSubjects.forEach(subj=>{
+    subjectsForYear.forEach(subj=>{
       const sections = bySubject[subj.id];
       const assignedIds = sections.map(sec=>state.assignments[assignKey(sec.id, subj.id)] || "");
       const allSame = assignedIds.every(id=>id===assignedIds[0]);
@@ -190,10 +175,6 @@ function renderAssignTab(){
     table.appendChild(tbody);
     body.appendChild(table);
 
-    if(!showAll && subjectsForYear.length>PAGE_SIZE){
-      const more = el(`<div class="show-more-link" data-year="${year}">Show ${subjectsForYear.length-PAGE_SIZE} more subject${subjectsForYear.length-PAGE_SIZE===1?'':'s'} ${icon('chevron')}</div>`);
-      body.appendChild(more);
-    }
     wrap.appendChild(det);
   });
 }
@@ -217,20 +198,6 @@ document.getElementById('assignGroups').addEventListener('click', function(e){
     renderAssignTab();
     return;
   }
-  const yearBulkBtn = e.target.closest('.yearBulkBtn');
-  if(yearBulkBtn){
-    const sel = yearBulkBtn.previousElementSibling;
-    if(sel && sel.classList.contains('yearBulkAssign')){
-      sel.classList.toggle('hidden');
-    }
-    return;
-  }
-  const moreLink = e.target.closest('.show-more-link');
-  if(moreLink){
-    expandedSubjectLists.add(moreLink.dataset.year);
-    renderAssignTab();
-    return;
-  }
 });
 document.getElementById('assignGroups').addEventListener('change', function(e){
   if(e.target.classList.contains('bulkAssign')){
@@ -247,18 +214,6 @@ document.getElementById('assignGroups').addEventListener('change', function(e){
     const key = assignKey(e.target.dataset.sec, e.target.dataset.subj);
     if(e.target.value) state.assignments[key] = e.target.value;
     else delete state.assignments[key];
-    persistSharedData();
-    renderAssignTab();
-  }
-  if(e.target.classList.contains('yearBulkAssign')){
-    const year = e.target.dataset.year;
-    const facId = e.target.value;
-    if(!facId) return;
-    state.subjects.filter(s=>String(s.year)===String(year)).forEach(subj=>{
-      state.sections.filter(sec=>sec.subjectIds.includes(subj.id)).forEach(sec=>{
-        state.assignments[assignKey(sec.id, subj.id)] = facId;
-      });
-    });
     persistSharedData();
     renderAssignTab();
   }
