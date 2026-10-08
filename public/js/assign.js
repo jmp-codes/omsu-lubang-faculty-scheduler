@@ -79,7 +79,15 @@ function renderAssignTab(){
   Object.keys(byYear).sort((a,b)=>a-b).forEach(year=>{
     const subjectsForYear = byYear[year].slice().sort((a,b)=> a.code.localeCompare(b.code));
     const isOpen = !collapsedYears.has(year);
-    const det = el(`<details class="group"${isOpen?' open':''}><summary>${YEAR_LABELS[year]||('Year '+year)} <span class="count">${subjectsForYear.length} subject${subjectsForYear.length===1?'':'s'}</span></summary><div class="group-body"></div></details>`);
+    let yearAssigned = 0, yearTotal = 0;
+    subjectsForYear.forEach(s=>{
+      bySubject[s.id].forEach(sec=>{
+        yearTotal++;
+        if(state.assignments[assignKey(sec.id, s.id)]) yearAssigned++;
+      });
+    });
+    const yearUnassigned = yearTotal - yearAssigned;
+    const det = el(`<details class="group"${isOpen?' open':''}><summary><span>${YEAR_LABELS[year]||('Year '+year)} <span class="count">${subjectsForYear.length} subject${subjectsForYear.length===1?'':'s'}</span></span><span class="row" style="flex:none; gap:6px;"><span class="badge badge-lecture">${yearAssigned} assigned</span>${yearUnassigned ? '<span class="badge badge-danger">'+yearUnassigned+' unassigned</span>' : ''}</span></summary><div class="group-body"></div></details>`);
     det.addEventListener('toggle', function(){
       if(det.open) collapsedYears.delete(year);
       else collapsedYears.add(year);
