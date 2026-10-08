@@ -28,6 +28,9 @@
       <button class="btn btn-danger" id="clearScheduleBtn">Clear Schedule</button>
       <button class="btn" id="revertScheduleBtn" disabled title="Swap back to the schedule that was in place before the last Generate or Clear">Revert to Previous Schedule</button>
     </div>
+    <label class="hint" style="display:flex; align-items:center; gap:6px; margin-top:8px; cursor:pointer;">
+      <input type="checkbox" id="randomizeGenChk"> Try a different valid arrangement (every scheduling rule still applies — this only changes which equally-good option is picked)
+    </label>
     <div id="genWarnings"></div>
     <div class="stat-row" id="genStats" style="margin-top:12px;"></div>
   </div>
