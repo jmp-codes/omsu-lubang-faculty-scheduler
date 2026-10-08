@@ -4,7 +4,7 @@ import {
   yearsInUse, downloadTextFile, toCsv, hasConflict, generateSchedule, expectedBlockIds, computeMissing,
   clearSchedule, revertSchedule, hasDeptScheduleBackup, parseAdminUnits, rescheduleBlockWithCascade,
   bootSession, loadFacultyAll, loadSubjectsAll, loadSectionsAll, loadSyncPrefAll,
-  loadSharedData, persistSharedData, describeAvailability, toast
+  loadSharedData, persistSharedData, describeAvailability, toast, dedupeById
 } from './shared.js';
 
 // Every write-side action on this page (Generate/Clear/Revert, manual
@@ -29,23 +29,6 @@ function canEditSection(sectionId){
 // for a chair; the registrar's view is never restricted.
 function myFacultyIds(){
   return new Set(state.faculty.filter(f=>f.department===session.department).map(f=>f.id));
-}
-
-// state.faculty (the full cross-department merge) can legitimately contain
-// the SAME faculty id more than once — a linked shared instructor is
-// stored as one copy per department they're linked into (see
-// faculty.js/linkInstructor), and loadFacultyAll() concatenates every
-// department's array as-is. That's correct for conflict-checking, but any
-// list that enumerates "every distinct faculty member" (Faculty Load
-// Summary, the By Faculty dropdown) needs to collapse those back down to
-// one row per person first, or a linked instructor shows up twice.
-function dedupeById(arr){
-  const seen = new Set();
-  return arr.filter(f=>{
-    if(seen.has(f.id)) return false;
-    seen.add(f.id);
-    return true;
-  });
 }
 
 // Whether a chair should see this schedule block at all (read-only
