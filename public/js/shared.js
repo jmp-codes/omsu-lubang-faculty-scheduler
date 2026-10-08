@@ -1152,7 +1152,11 @@ const ICON_PATHS = {
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.5h.01"/>',
   chevron: '<path d="m9 6 6 6-6 6"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
-  calendarCheck: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="m8.5 15 2 2 4-4"/>'
+  calendarCheck: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="m8.5 15 2 2 4-4"/>',
+  filter: '<path d="M4 5h16l-6 7.5V19l-4 2v-8.5L4 5Z"/>',
+  download: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 19h16"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
+  clear: '<circle cx="12" cy="12" r="9"/><path d="m9.5 9.5 5 5M14.5 9.5l-5 5"/>'
 };
 export function icon(name, cls){
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${cls||''}">${ICON_PATHS[name]||''}</svg>`;
@@ -1218,8 +1222,8 @@ function renderChrome(activeKey){
               <div><strong>${escapeHtml(session.email||'')}</strong></div>
               <div class="muted" style="font-size:12px;">${escapeHtml(roleLabel)}</div>
             </div>
-            <button class="btn btn-sm" id="exportDataBtn" title="Download the data currently loaded on this page as a JSON file">Export Data</button>
-            <button class="btn btn-sm" id="logoutBtn">Log Out</button>
+            <button class="btn btn-sm" id="exportDataBtn" title="Download the data currently loaded on this page as a JSON file">${icon('download')}Export Data</button>
+            <button class="btn btn-sm" id="logoutBtn">${icon('logout')}Log Out</button>
           </div>
         </div>
         <div id="deptBar"></div>
@@ -1260,6 +1264,29 @@ function renderChrome(activeKey){
   }
   if(footerMount){
     footerMount.innerHTML = `<div class="footer-note">Faculty Scheduler · signed in as ${escapeHtml(session.email||'')} (${escapeHtml(roleLabel)})</div>`;
+  }
+}
+
+// Swaps the header's default "Faculty Scheduler" title + university
+// subtitle for a page-specific title and a "Home > ... > Current Page"
+// breadcrumb trail. Call after bootSession() (so #chromeHeader is already
+// rendered) from any page that wants this — it's an opt-in post-process on
+// the existing header markup rather than a renderChrome() parameter, so
+// every page that doesn't call it keeps today's header exactly as-is.
+// `crumbs` is an array of {label, href?} — the last entry (current page)
+// should omit href.
+export function renderPageTitle(title, crumbs){
+  const header = document.querySelector('#chromeHeader .app-header');
+  if(!header) return;
+  const titleEl = header.querySelector('h1');
+  const subEl = header.querySelector('.sub');
+  if(titleEl) titleEl.textContent = title;
+  if(subEl){
+    subEl.className = 'breadcrumb';
+    subEl.innerHTML = crumbs.map((c,i)=> i<crumbs.length-1 && c.href
+      ? `<a href="${c.href}">${escapeHtml(c.label)}</a><span class="sep">›</span>`
+      : `<span class="current">${escapeHtml(c.label)}</span>`
+    ).join('');
   }
 }
 
