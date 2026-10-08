@@ -1,5 +1,5 @@
 import {
-  state, session, el, escapeHtml, byId, facultyName, subjectById, roomById, sectionById,
+  state, session, el, escapeHtml, icon, byId, facultyName, subjectById, roomById, sectionById,
   assignKey, syncKey, YEAR_LABELS, DAYS, DAY_NAMES, DAY_START, DAY_END, TIME_STEP, spansLunch, hourLabel, timeRangeLabel,
   yearsInUse, downloadTextFile, toCsv, hasConflict, generateSchedule, expectedBlockIds, computeMissing,
   clearSchedule, revertSchedule, hasDeptScheduleBackup, parseAdminUnits, rescheduleBlockWithCascade,
@@ -205,11 +205,21 @@ function renderGenStats(){
     ? state.schedule.filter(b=>{ const sec = sectionById(b.sectionId); return sec && sec.department===scope; }).length
     : state.schedule.length;
   const missing = computeMissing().filter(m=> !scope || m.sec.department===scope).length;
-  wrap.innerHTML = `
-    <div class="stat"><div class="n">${placed}</div><div class="l">Sessions Placed</div></div>
-    <div class="stat"><div class="n">${missing}</div><div class="l">Unscheduled</div></div>
-    <div class="stat"><div class="n">${totalOfferings}</div><div class="l">Total Expected</div></div>
-  `;
+  // Icon tiles matching the Home dashboard's .home-card style instead of
+  // the old plain .stat-row boxes — same three numbers, same scoping.
+  const tiles = [
+    {icn:'check', cls:'c-teal', n:placed, label:'Sessions Placed', sub:'currently in the schedule'},
+    {icn:'warn', cls:'c-gold', n:missing, label:'Unscheduled', sub:'need manual placement'},
+    {icn:'schedule', cls:'c-blue', n:totalOfferings, label:'Total Expected', sub:'sessions this term'}
+  ];
+  wrap.innerHTML = tiles.map(t=>'<div class="home-card static-card">'
+    + '<div class="home-card-icon '+t.cls+'">'+icon(t.icn)+'</div>'
+    + '<div>'
+    + '<div class="d" style="margin-bottom:2px;">'+escapeHtml(t.label)+'</div>'
+    + '<div class="n">'+t.n+'</div>'
+    + '<div class="d">'+escapeHtml(t.sub)+'</div>'
+    + '</div>'
+    + '</div>').join('');
 }
 
 // Tracks which section groups below have been manually collapsed, so a
