@@ -18,10 +18,36 @@
   <div class="home-grid" id="assignStatTiles"></div>
 
   <div class="card">
-    <h2>Assign Instructors</h2>
-    <div class="hint">Grouped by subject. Use the bulk dropdown to assign one instructor to every section below it, or set individual instructors per section.</div>
+    <div class="toolbar" style="align-items:flex-start;">
+      <div class="row" style="align-items:flex-start;">
+        <div class="home-card-icon c-gold" style="margin-top:2px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.3 3-5.5 6.5-5.5s6.5 2.2 6.5 5.5"/><path d="m16 11 2 2 3.5-3.5"/></svg></div>
+        <div>
+          <h2 style="margin-bottom:2px;">Assign Instructors</h2>
+          <div class="hint" style="margin-bottom:0;">Group subjects by year level. Use the dropdown to assign one instructor to every section below it, or set individual instructors per section.</div>
+        </div>
+      </div>
+      <div class="group">
+        <input type="text" id="assignSearchInput" class="search-field" placeholder="Search by subject code or name...">
+        <button class="btn btn-sm" id="assignFiltersBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16l-6 7.5V19l-4 2v-8.5L4 5Z"/></svg>Filters</button>
+      </div>
+    </div>
+    <div id="assignFiltersBar" class="row hidden" style="margin:-4px 0 14px 0; padding-bottom:14px; border-bottom:1px solid var(--border-soft);">
+      <label class="muted" style="font-size:12px;">Type</label>
+      <select id="assignFilterType">
+        <option value="">All types</option>
+        <option value="lecture">Lecture</option>
+        <option value="lab">Laboratory</option>
+      </select>
+      <label class="muted" style="font-size:12px;">Status</label>
+      <select id="assignFilterStatus">
+        <option value="">All statuses</option>
+        <option value="assigned">Fully assigned</option>
+        <option value="unassigned">Needs an instructor</option>
+      </select>
+    </div>
     <div id="assignGroups"></div>
     <div id="assignEmpty" class="empty-msg hidden">Add subjects to sections first before assigning instructors.</div>
+    <div id="assignSearchEmpty" class="empty-msg hidden">No subjects match your search or filters.</div>
   </div>
 </main>
 
