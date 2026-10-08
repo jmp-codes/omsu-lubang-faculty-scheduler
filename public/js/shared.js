@@ -346,6 +346,23 @@ export function sectionById(id){ return byId(state.sections,id); }
 export function assignKey(sectionId,subjectId){ return sectionId+"::"+subjectId; }
 export function syncKey(year,subjectId){ return year+"::"+subjectId; }
 
+// state.faculty (loadFacultyAll's full cross-department merge) can
+// legitimately contain the SAME faculty id more than once — a linked
+// shared instructor is stored as one copy per department they're linked
+// into (see faculty.js/linkInstructor). That's correct for conflict
+// checking, but any list that enumerates "every distinct faculty member"
+// (Home's stat tiles, the Faculty Load Summary, the By Faculty dropdown)
+// needs to collapse those back to one row per person first. Shared here so
+// every such list uses the same rule.
+export function dedupeById(arr){
+  const seen = new Set();
+  return arr.filter(f=>{
+    if(seen.has(f.id)) return false;
+    seen.add(f.id);
+    return true;
+  });
+}
+
 export function yearsInUse(){
   const ys = new Set();
   state.sections.forEach(s=>ys.add(String(s.year)));
@@ -1118,15 +1135,38 @@ export function parseAdminUnits(designations){
 /* ============================================================
    CHROME — shared header + nav injected into every page
    ============================================================ */
+// Small hand-drawn line-icon set (24x24, stroke-based, no external icon
+// font/library) shared by the sidebar nav, and by Home's stat tiles,
+// Scheduling Status checklist and Quick Actions panel — see icon() below.
+const ICON_PATHS = {
+  home: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V10"/><path d="M9 21v-6h6v6"/>',
+  faculty: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.3 3-5.5 6.5-5.5s6.5 2.2 6.5 5.5"/><path d="M16 8.2c1.3.3 2.3 1.4 2.3 2.8 0 1.1-.6 2-1.5 2.5"/><path d="M15.5 14.7c2.6.5 4.5 2.3 4.5 4.8"/>',
+  subjects: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15Z"/>',
+  sections: '<rect x="3" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="7" rx="1.5"/><rect x="3" y="15" width="7" height="7" rx="1.5"/><rect x="14" y="15" width="7" height="7" rx="1.5"/>',
+  rooms: '<path d="M4 21V6l8-3 8 3v15"/><path d="M4 21h16"/><path d="M9 21v-5h6v5"/><path d="M9 10h.01M15 10h.01M9 14h.01M15 14h.01"/>',
+  assign: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.3 3-5.5 6.5-5.5s6.5 2.2 6.5 5.5"/><path d="m16 11 2 2 3.5-3.5"/>',
+  schedule: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>',
+  users: '<circle cx="8" cy="8" r="3.2"/><circle cx="17" cy="9" r="2.6"/><path d="M2.5 20c0-3.1 2.8-5.2 5.5-5.2s5.5 2.1 5.5 5.2"/><path d="M14.5 15.3c2.2.2 4 1.9 4 4.7"/>',
+  check: '<circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.5 2.5L16 9.5"/>',
+  warn: '<path d="M10.3 3.9 2.6 18a1.8 1.8 0 0 0 1.6 2.7h15.6a1.8 1.8 0 0 0 1.6-2.7L13.7 3.9a1.8 1.8 0 0 0-3.4 0Z"/><path d="M12 9.5v4M12 17h.01"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.5h.01"/>',
+  chevron: '<path d="m9 6 6 6-6 6"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  calendarCheck: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/><path d="m8.5 15 2 2 4-4"/>'
+};
+export function icon(name, cls){
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${cls||''}">${ICON_PATHS[name]||''}</svg>`;
+}
+
 const NAV_ITEMS = [
-  {key:'home', href:'index.html', label:'Home', roles:['registrar','chair']},
-  {key:'faculty', href:'faculty.html', label:'Faculty', roles:['registrar','chair']},
-  {key:'subjects', href:'subjects.html', label:'Subjects', roles:['registrar','chair']},
-  {key:'sections', href:'sections.html', label:'Sections', roles:['registrar','chair']},
-  {key:'rooms', href:'rooms.html', label:'Rooms', roles:['registrar','chair']},
-  {key:'assign', href:'assign.html', label:'Assign Instructors', roles:['registrar','chair']},
-  {key:'schedule', href:'schedule.html', label:'Generate Schedule', roles:['registrar','chair']},
-  {key:'users', href:'users.html', label:'Users', roles:['registrar']}
+  {key:'home', href:'index.html', label:'Home', icon:'home', roles:['registrar','chair']},
+  {key:'faculty', href:'faculty.html', label:'Faculty', icon:'faculty', roles:['registrar','chair']},
+  {key:'subjects', href:'subjects.html', label:'Subjects', icon:'subjects', roles:['registrar','chair']},
+  {key:'sections', href:'sections.html', label:'Sections', icon:'sections', roles:['registrar','chair']},
+  {key:'rooms', href:'rooms.html', label:'Rooms', icon:'rooms', roles:['registrar','chair']},
+  {key:'assign', href:'assign.html', label:'Assign Instructors', icon:'assign', roles:['registrar','chair']},
+  {key:'schedule', href:'schedule.html', label:'Generate Schedule', icon:'schedule', roles:['registrar','chair']},
+  {key:'users', href:'users.html', label:'Users', icon:'users', roles:['registrar']}
 ];
 
 // Points the browser tab's favicon at the OMSU seal. Done here (once, at
@@ -1152,12 +1192,9 @@ function renderChrome(activeKey){
     headerMount.innerHTML = `
       <header class="app-header">
         <div class="row" style="justify-content:space-between; align-items:flex-start;">
-          <div class="row" style="align-items:center; gap:14px;">
-            <img src="assets/omsu-logo.png" alt="Occidental Mindoro State University seal" class="brand-logo">
-            <div>
-              <h1>Faculty Scheduler</h1>
-              <div class="sub">Occidental Mindoro State University — Faculty, subjects, rooms &amp; sections — auto-generated weekly schedule</div>
-            </div>
+          <div>
+            <h1>Faculty Scheduler</h1>
+            <div class="sub">Occidental Mindoro State University — Faculty, subjects, rooms &amp; sections — auto-generated weekly schedule</div>
           </div>
           <div class="row" style="flex:none; align-items:center;">
             <div class="user-badge">
@@ -1181,11 +1218,28 @@ function renderChrome(activeKey){
       location.href = 'index.html';
     });
   }
+  // #chromeNav is now the fixed left sidebar (see app.css) rather than a
+  // row of top tabs — the OMSU seal and app name live here instead of the
+  // header, plus an icon'd nav list and the campus tagline. Mount id is
+  // unchanged, so no page's HTML needed to change, only what's injected.
   if(navMount){
     const visible = NAV_ITEMS.filter(item=> session.isRegistrar ? item.roles.includes('registrar') : item.roles.includes('chair'));
-    navMount.innerHTML = `<nav class="tabs">` +
-      visible.map(item=>`<a href="${item.href}" class="${item.key===activeKey?'active':''}">${item.label}</a>`).join("") +
-      `</nav>`;
+    navMount.innerHTML = `
+      <aside class="sidebar">
+        <div class="sidebar-brand">
+          <img src="assets/omsu-logo.png" alt="Occidental Mindoro State University seal" class="sidebar-logo">
+          <div>
+            <div class="sidebar-title">OMSU</div>
+            <div class="sidebar-subtitle">Faculty Scheduler</div>
+            <div class="sidebar-org">Occidental Mindoro State University</div>
+          </div>
+        </div>
+        <nav class="sidebar-nav">
+          ${visible.map(item=>`<a href="${item.href}" class="${item.key===activeKey?'active':''}">${icon(item.icon)}<span>${item.label}</span></a>`).join("")}
+        </nav>
+        <div class="sidebar-foot">Excellence. Service. Development.</div>
+      </aside>
+    `;
   }
   if(footerMount){
     footerMount.innerHTML = `<div class="footer-note">Faculty Scheduler · signed in as ${escapeHtml(session.email||'')} (${escapeHtml(roleLabel)})</div>`;
