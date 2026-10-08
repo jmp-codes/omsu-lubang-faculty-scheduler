@@ -5,10 +5,11 @@ import {
   loadSharedData, persistSharedData
 } from './shared.js';
 
-// Tracks year-level groups the user has manually collapsed, so a bulk
-// assignment (which re-renders the whole tab) doesn't silently snap every
-// group back open — same pattern used on the Subjects/Sections pages.
-const collapsedYears = new Set();
+// Tracks year-level groups the user has manually expanded. Renders
+// collapsed by default — same reasoning and pattern as Subjects/Sections —
+// and a bulk assignment (which re-renders the whole tab) keeps whatever a
+// user has opened or closed open instead of silently resetting it.
+const openedYears = new Set();
 let facultyDeptById = {};
 // Lets a chair pick an existing faculty member from another department by
 // name+department instead of re-typing them as a new record (see boot()).
@@ -78,7 +79,7 @@ function renderAssignTab(){
 
   Object.keys(byYear).sort((a,b)=>a-b).forEach(year=>{
     const subjectsForYear = byYear[year].slice().sort((a,b)=> a.code.localeCompare(b.code));
-    const isOpen = !collapsedYears.has(year);
+    const isOpen = openedYears.has(year);
     let yearAssigned = 0, yearTotal = 0;
     subjectsForYear.forEach(s=>{
       bySubject[s.id].forEach(sec=>{
@@ -89,8 +90,8 @@ function renderAssignTab(){
     const yearUnassigned = yearTotal - yearAssigned;
     const det = el(`<details class="group"${isOpen?' open':''}><summary><span>${YEAR_LABELS[year]||('Year '+year)} <span class="count">${subjectsForYear.length} subject${subjectsForYear.length===1?'':'s'}</span></span><span class="row" style="flex:none; gap:6px;"><span class="badge badge-lecture">${yearAssigned} assigned</span>${yearUnassigned ? '<span class="badge badge-danger">'+yearUnassigned+' unassigned</span>' : ''}</span></summary><div class="group-body"></div></details>`);
     det.addEventListener('toggle', function(){
-      if(det.open) collapsedYears.delete(year);
-      else collapsedYears.add(year);
+      if(det.open) openedYears.add(year);
+      else openedYears.delete(year);
     });
     const body = det.querySelector('.group-body');
 
