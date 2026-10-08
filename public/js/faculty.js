@@ -1,5 +1,5 @@
 import {
-  state, uid, el, escapeHtml, timeRangeLabel, byId,
+  state, uid, el, escapeHtml, icon, timeRangeLabel, byId,
   DAYS, DAY_START, DAY_END, hourLabel, parseDelimitedText,
   bootSession, wireDeptBar, loadFaculty, persistFaculty,
   session, loadFacultyDirectory, fetchFacultyAll, describeAvailability, toast
@@ -114,7 +114,35 @@ function renderExternalPanel(facId){
   `;
 }
 
+// Icon stat tiles mirroring the Home dashboard's .home-card style — total
+// roster size plus a full-time/part-time/rank-variety breakdown, computed
+// straight from this department's own faculty list (myDept()'s roster,
+// native members plus anyone linked in via "Link a Shared Instructor").
+function renderFacultyStats(){
+  const mount = document.getElementById('facultyStatTiles');
+  if(!mount) return;
+  const total = state.faculty.length;
+  const partTime = state.faculty.filter(f=>f.rank==='Part-Time Instructor').length;
+  const fullTime = total - partTime;
+  const ranks = new Set(state.faculty.map(f=>f.rank).filter(Boolean)).size;
+  const tiles = [
+    {icn:'faculty', cls:'c-blue', n:total, label:'Total Faculty', sub: myDept() ? myDept()+' roster' : 'faculty members'},
+    {icn:'check', cls:'c-teal', n:fullTime, label:'Full-Time', sub:'full-time ranks'},
+    {icn:'users', cls:'c-gold', n:partTime, label:'Part-Time', sub:'part-time instructors'},
+    {icn:'info', cls:'c-purple', n:ranks, label:'Academic Ranks', sub:'distinct ranks in use'}
+  ];
+  mount.innerHTML = tiles.map(t=>'<div class="home-card static-card">'
+    + '<div class="home-card-icon '+t.cls+'">'+icon(t.icn)+'</div>'
+    + '<div>'
+    + '<div class="d" style="margin-bottom:2px;">'+escapeHtml(t.label)+'</div>'
+    + '<div class="n">'+t.n+'</div>'
+    + '<div class="d">'+escapeHtml(t.sub)+'</div>'
+    + '</div>'
+    + '</div>').join('');
+}
+
 function renderFacultyTable(){
+  renderFacultyStats();
   const tbody = document.getElementById('facultyTableBody');
   tbody.innerHTML = "";
   document.getElementById('facultyEmpty').classList.toggle('hidden', state.faculty.length>0);
