@@ -1,5 +1,5 @@
 import {
-  state, uid, el, escapeHtml, roomById, sectionById, parseDelimitedText,
+  state, uid, el, escapeHtml, icon, roomById, sectionById, parseDelimitedText,
   session, DEPARTMENTS,
   bootSession, loadSharedData, loadSectionsAll, persistSharedData, toast
 } from './shared.js';
@@ -27,7 +27,36 @@ function populateRoomDeptSelect(){
     DEPARTMENTS.map(d=>`<option value="${d}">${escapeHtml(d)}</option>`).join("");
 }
 
+// Icon stat tiles mirroring the Home dashboard's .home-card style — same
+// department scoping renderRoomsTable() already uses (a chair sees their
+// own department's rooms plus Shared ones; the registrar sees every room).
+function renderRoomsStats(){
+  const mount = document.getElementById('roomsStatTiles');
+  if(!mount) return;
+  const scoped = session.isRegistrar ? state.rooms
+    : state.rooms.filter(r=> !r.department || r.department===session.department);
+  const total = scoped.length;
+  const lecture = scoped.filter(r=>r.type==='lecture').length;
+  const lab = scoped.filter(r=>r.type==='lab').length;
+  const totalCapacity = scoped.reduce((s,r)=>s+(r.capacity||0),0);
+  const tiles = [
+    {icn:'rooms', cls:'c-blue', n:total, label:'Total Rooms', sub:'lecture + lab'},
+    {icn:'rooms', cls:'c-teal', n:lecture, label:'Lecture Rooms', sub:'lecture rooms'},
+    {icn:'rooms', cls:'c-gold', n:lab, label:'Laboratory Rooms', sub:'lab rooms'},
+    {icn:'info', cls:'c-purple', n:totalCapacity, label:'Total Capacity', sub:'combined max students'}
+  ];
+  mount.innerHTML = tiles.map(t=>'<div class="home-card static-card">'
+    + '<div class="home-card-icon '+t.cls+'">'+icon(t.icn)+'</div>'
+    + '<div>'
+    + '<div class="d" style="margin-bottom:2px;">'+escapeHtml(t.label)+'</div>'
+    + '<div class="n">'+t.n+'</div>'
+    + '<div class="d">'+escapeHtml(t.sub)+'</div>'
+    + '</div>'
+    + '</div>').join('');
+}
+
 function renderRoomsTable(){
+  renderRoomsStats();
   const tbody = document.getElementById('roomsTableBody');
   tbody.innerHTML = "";
   // A chair only sees their own department's rooms plus Shared ones — the
