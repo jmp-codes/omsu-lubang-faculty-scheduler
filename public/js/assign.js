@@ -1,5 +1,5 @@
 import {
-  state, el, escapeHtml, assignKey, YEAR_LABELS, describeAvailability, session,
+  state, el, escapeHtml, icon, assignKey, YEAR_LABELS, describeAvailability, session,
   bootSession, loadFaculty, loadSubjects, loadSections,
   loadFacultyAll, loadSubjectsAll, loadSectionsAll, loadFacultyDirectory,
   loadSharedData, persistSharedData
@@ -25,7 +25,42 @@ function facOptionLabel(f){
   return label;
 }
 
+// Icon stat tiles mirroring the Home dashboard's .home-card style — counts
+// every section/subject pair that needs an instructor (the same pairs
+// renderAssignTab() below builds rows for), how many already have one, and
+// the completion rate.
+function assignStats(){
+  let total = 0, assigned = 0;
+  state.sections.forEach(sec=>{
+    sec.subjectIds.forEach(subjId=>{
+      total++;
+      if(state.assignments[assignKey(sec.id, subjId)]) assigned++;
+    });
+  });
+  return { total, assigned, unassigned: total - assigned, pct: total ? Math.round(100*assigned/total) : 0 };
+}
+function renderAssignStats(){
+  const mount = document.getElementById('assignStatTiles');
+  if(!mount) return;
+  const s = assignStats();
+  const tiles = [
+    {icn:'assign', cls:'c-blue', n:s.total, label:'Total Assignments', sub:'section–subject pairs'},
+    {icn:'check', cls:'c-teal', n:s.assigned, label:'Assigned', sub:'instructor set'},
+    {icn:'warn', cls:'c-gold', n:s.unassigned, label:'Unassigned', sub:'needs an instructor'},
+    {icn:'calendarCheck', cls:'c-purple', n:s.pct+'%', label:'Completion Rate', sub:'of all assignments'}
+  ];
+  mount.innerHTML = tiles.map(t=>'<div class="home-card static-card">'
+    + '<div class="home-card-icon '+t.cls+'">'+icon(t.icn)+'</div>'
+    + '<div>'
+    + '<div class="d" style="margin-bottom:2px;">'+escapeHtml(t.label)+'</div>'
+    + '<div class="n">'+t.n+'</div>'
+    + '<div class="d">'+escapeHtml(t.sub)+'</div>'
+    + '</div>'
+    + '</div>').join('');
+}
+
 function renderAssignTab(){
+  renderAssignStats();
   const wrap = document.getElementById('assignGroups');
   wrap.innerHTML = "";
   const bySubject = {};
