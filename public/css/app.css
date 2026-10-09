@@ -84,6 +84,8 @@
     font-size:10px; color:var(--muted-2); text-align:center; letter-spacing:0.2px;
     padding-top:14px; margin-top:10px; border-top:1px solid var(--border-soft);
   }
+  .sidebar-foot-art{ width:100%; max-width:220px; height:auto; display:block; margin:0 auto 6px auto; opacity:0.9; }
+  .sidebar-foot-tagline{ font-size:9.5px; color:var(--muted-2); letter-spacing:0.6px; text-transform:uppercase; font-weight:600; }
   @media (max-width: 880px){
     #chromeNav{ position:static; width:auto; height:auto; }
     .sidebar{ border-right:none; border-bottom:1px solid var(--border); }
@@ -277,14 +279,15 @@
 
   .hero-banner{
     border-radius:14px; padding:26px 28px; margin-bottom:18px; position:relative; overflow:hidden;
-    background:linear-gradient(135deg, #1a2550 0%, #0f1729 55%, #140f24 100%);
+    background:url('assets/building-glow.png') no-repeat right bottom / 420px auto, linear-gradient(135deg, #1a2550 0%, #0f1729 55%, #140f24 100%);
     border:1px solid var(--border);
   }
   .hero-banner::after{
     content:""; position:absolute; inset:0; pointer-events:none;
     background:radial-gradient(420px 220px at 85% 0%, rgba(232,189,63,0.14), transparent 70%);
   }
-  .hero-banner .eyebrow{ color:var(--muted); font-size:13px; margin-bottom:2px; position:relative; }
+    .hero-tagline{ position:absolute; right:20px; bottom:14px; font-size:10px; letter-spacing:1.2px; text-transform:uppercase; color:var(--gold); font-weight:700; opacity:0.85; }
+.hero-banner .eyebrow{ color:var(--muted); font-size:13px; margin-bottom:2px; position:relative; }
   .hero-banner h2{ font-size:27px; color:#f3e6c4; margin-bottom:5px; position:relative; }
   .hero-banner .sub{ color:var(--muted); font-size:13.5px; max-width:560px; position:relative; }
 
