@@ -279,6 +279,7 @@
 
   .hero-banner{
     border-radius:14px; padding:26px 28px; margin-bottom:18px; position:relative; overflow:hidden;
+    min-height:230px; display:flex; flex-direction:column; justify-content:center;
     background:linear-gradient(135deg, #1a2550 0%, #0f1729 55%, #140f24 100%);
     border:1px solid var(--border);
   }
