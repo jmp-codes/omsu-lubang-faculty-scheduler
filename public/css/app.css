@@ -279,7 +279,7 @@
 
   .hero-banner{
     border-radius:14px; padding:26px 28px; margin-bottom:18px; position:relative; overflow:hidden;
-    background:url('assets/building-glow.png') no-repeat right bottom / 420px auto, linear-gradient(135deg, #1a2550 0%, #0f1729 55%, #140f24 100%);
+    background:url('assets/building-glow.svg') no-repeat right bottom / 420px auto, linear-gradient(135deg, #1a2550 0%, #0f1729 55%, #140f24 100%);
     border:1px solid var(--border);
   }
   .hero-banner::after{
