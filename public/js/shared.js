@@ -1325,7 +1325,10 @@ function renderChrome(activeKey){
         <nav class="sidebar-nav">
           ${visible.map(item=>`<a href="${item.href}" class="${item.key===activeKey?'active':''}">${icon(item.icon)}<span>${item.label}</span></a>`).join("")}
         </nav>
-        <div class="sidebar-foot">Excellence. Service. Development.</div>
+        <div class="sidebar-foot">
+            <img src="assets/building-glow.png" alt="" class="sidebar-foot-art">
+            <div class="sidebar-foot-tagline">Educate. Empower. Excel.</div>
+          </div>
       </aside>
     `;
   }
