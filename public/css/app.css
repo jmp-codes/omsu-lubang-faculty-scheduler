@@ -279,17 +279,27 @@
 
   .hero-banner{
     border-radius:14px; padding:26px 28px; margin-bottom:18px; position:relative; overflow:hidden;
-    background:url('assets/building-glow.svg') no-repeat right bottom / 420px auto, linear-gradient(135deg, #1a2550 0%, #0f1729 55%, #140f24 100%);
+    background:linear-gradient(135deg, #1a2550 0%, #0f1729 55%, #140f24 100%);
     border:1px solid var(--border);
   }
-  .hero-banner::after{
-    content:""; position:absolute; inset:0; pointer-events:none;
-    background:radial-gradient(420px 220px at 85% 0%, rgba(232,189,63,0.14), transparent 70%);
+  .hero-banner::before{
+    content:""; position:absolute; top:0; right:0; bottom:0; width:62%; z-index:0; pointer-events:none;
+    background:linear-gradient(135deg, #f6dfa0 0%, #e8bd3f 100%);
+    clip-path:polygon(22% 0%, 100% 0%, 100% 100%, 0% 100%);
   }
-    .hero-tagline{ position:absolute; right:20px; bottom:14px; font-size:10px; letter-spacing:1.2px; text-transform:uppercase; color:var(--gold); font-weight:700; opacity:0.85; }
-.hero-banner .eyebrow{ color:var(--muted); font-size:13px; margin-bottom:2px; position:relative; }
-  .hero-banner h2{ font-size:27px; color:#f3e6c4; margin-bottom:5px; position:relative; }
-  .hero-banner .sub{ color:var(--muted); font-size:13.5px; max-width:560px; position:relative; }
+  .hero-banner::after{
+    content:""; position:absolute; top:0; right:0; bottom:0; width:60%; z-index:1; pointer-events:none;
+    clip-path:polygon(24% 0%, 100% 0%, 100% 100%, 2% 100%);
+    background:
+      radial-gradient(420px 220px at 85% 0%, rgba(232,189,63,0.14), transparent 70%),
+      linear-gradient(0deg, rgba(10,15,28,0.55) 0%, rgba(10,15,28,0) 30%),
+      linear-gradient(100deg, #0f1729 0%, rgba(15,23,41,0.55) 16%, rgba(15,23,41,0) 42%),
+      url('assets/campus-photo.jpg') no-repeat center center / cover;
+  }
+    .hero-tagline{ position:absolute; right:20px; bottom:14px; z-index:2; font-size:10px; letter-spacing:1.2px; text-transform:uppercase; color:#f6dfa0; font-weight:700; opacity:0.95; text-shadow:0 1px 3px rgba(0,0,0,0.85), 0 0 10px rgba(0,0,0,0.5); }
+.hero-banner .eyebrow{ color:var(--muted); font-size:13px; margin-bottom:2px; position:relative; z-index:2; }
+  .hero-banner h2{ font-size:27px; color:#f3e6c4; margin-bottom:5px; position:relative; z-index:2; }
+  .hero-banner .sub{ color:var(--muted); font-size:13.5px; max-width:300px; position:relative; z-index:2; }
 
   .dashboard-grid{ display:grid; grid-template-columns:2fr 1fr; gap:0 18px; align-items:start; }
   .dashboard-main, .dashboard-side{ min-width:0; }
