@@ -90,13 +90,25 @@ export let session = { token: null, email: null, isRegistrar: false, department:
 
 const TOKEN_KEY = 'fs_token';
 function loadToken(){
-  try{ return localStorage.getItem(TOKEN_KEY); }catch(e){ return null; }
+  try{ return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY); }catch(e){ return null; }
 }
-function saveToken(token){
-  try{ localStorage.setItem(TOKEN_KEY, token); }catch(e){}
+function saveToken(token, remember){
+  // remember !== false (the default) persists across browser restarts via
+  // localStorage; remember === false (the "Remember me" box left unchecked)
+  // keeps the session only for this tab via sessionStorage instead.
+  try{
+    if(remember === false){
+      sessionStorage.setItem(TOKEN_KEY, token);
+      localStorage.removeItem(TOKEN_KEY);
+    } else {
+      localStorage.setItem(TOKEN_KEY, token);
+      sessionStorage.removeItem(TOKEN_KEY);
+    }
+  }catch(e){}
 }
 function clearToken(){
   try{ localStorage.removeItem(TOKEN_KEY); }catch(e){}
+  try{ sessionStorage.removeItem(TOKEN_KEY); }catch(e){}
 }
 
 // Decodes a JWT's payload WITHOUT verifying its signature — fine here
@@ -140,20 +152,75 @@ function saveManageDept(dept){
 // third-party widget. A full page reload after a successful login is the
 // simplest way to get bootSession() to re-run and pick up the new token,
 // consistent with this app already being a classic multi-page (not SPA) site.
+// Renders the campus-background login screen in place of the whole page —
+// a university-seal/title block above a glassy card, modeled on the old
+// Netlify "please sign in" overlay but backed by our own endpoint instead
+// of a third-party widget. A full page reload after a successful login is
+// the simplest way to get bootSession() to re-run and pick up the new
+// token, consistent with this app already being a classic multi-page (not
+// SPA) site.
 function renderLoginForm(){
+  document.body.classList.add('login-bg');
   document.body.innerHTML = `
-    <div style="min-height:100vh; display:flex; align-items:center; justify-content:center;">
-      <form id="loginForm" class="card" style="width:100%; max-width:360px; padding:28px;">
-        <h2 style="margin-top:0;">Log In</h2>
-        <div id="loginError" class="warn-box" style="display:none; margin-bottom:12px;"></div>
-        <label class="muted" style="font-size:12px;">Email</label>
-        <input type="email" id="loginEmail" required autocomplete="username" style="width:100%; margin:4px 0 14px;">
-        <label class="muted" style="font-size:12px;">Password</label>
-        <input type="password" id="loginPassword" required autocomplete="current-password" style="width:100%; margin:4px 0 18px;">
-        <button type="submit" class="btn btn-teal" style="width:100%;" id="loginSubmitBtn">Log In</button>
-      </form>
+    <div class="login-screen">
+      <div class="login-version">v1.0.0</div>
+      <div class="login-stack">
+        <img src="assets/omsu-logo.png" alt="Occidental Mindoro State University seal" class="login-seal">
+        <h1 class="login-university">Occidental Mindoro State University</h1>
+        <div class="login-university-rule"></div>
+        <div class="login-product">Faculty Scheduler</div>
+        <div class="login-tagline">Faculty, subjects, rooms &amp; sections — auto-generated weekly schedule</div>
+        <form id="loginForm" class="login-card">
+          <h2>Welcome Back!</h2>
+          <div class="login-sub">Sign in to your Faculty Scheduler account</div>
+          <div id="loginError" class="warn-box" style="display:none;"></div>
+          <div class="login-field">
+            <label for="loginEmail">Email</label>
+            <div class="login-input-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 6l-10 7L2 6"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg>
+              <input type="email" id="loginEmail" required autocomplete="username" placeholder="e.g. bsit.lubang@omsu.edu.ph">
+            </div>
+          </div>
+          <div class="login-field">
+            <label for="loginPassword">Password</label>
+            <div class="login-input-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+              <input type="password" id="loginPassword" required autocomplete="current-password" placeholder="Enter your password">
+              <button type="button" class="login-toggle-pw" id="loginTogglePw" aria-label="Show password">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="login-row">
+            <label class="login-remember"><input type="checkbox" id="loginRemember" checked> Remember me</label>
+            <a href="#" class="login-forgot" id="loginForgot">Forgot password?</a>
+          </div>
+          <button type="submit" class="btn btn-primary login-submit" id="loginSubmitBtn">Log In <span aria-hidden="true">→</span></button>
+          <hr class="login-divider">
+          <div class="login-footnote">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+            Authorized faculty members only
+          </div>
+        </form>
+      </div>
     </div>
   `;
+
+  const pwInput = document.getElementById('loginPassword');
+  const toggleBtn = document.getElementById('loginTogglePw');
+  toggleBtn.addEventListener('click', function(){
+    const willShow = pwInput.type === 'password';
+    pwInput.type = willShow ? 'text' : 'password';
+    toggleBtn.setAttribute('aria-label', willShow ? 'Hide password' : 'Show password');
+  });
+
+  document.getElementById('loginForgot').addEventListener('click', function(e){
+    e.preventDefault();
+    const errEl = document.getElementById('loginError');
+    errEl.textContent = "Password resets aren't self-service yet — please contact the registrar's office.";
+    errEl.style.display = '';
+  });
+
   document.getElementById('loginForm').addEventListener('submit', async function(e){
     e.preventDefault();
     const errEl = document.getElementById('loginError');
@@ -174,13 +241,13 @@ function renderLoginForm(){
       if(!res.ok){
         throw new Error(data.error || 'Login failed.');
       }
-      saveToken(data.token);
+      saveToken(data.token, document.getElementById('loginRemember').checked);
       location.reload();
     }catch(err){
       errEl.textContent = err.message || 'Login failed.';
       errEl.style.display = '';
       btn.disabled = false;
-      btn.textContent = 'Log In';
+      btn.innerHTML = 'Log In <span aria-hidden="true">→</span>';
     }
   });
 }
