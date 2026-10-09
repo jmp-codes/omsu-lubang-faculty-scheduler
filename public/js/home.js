@@ -53,6 +53,7 @@ function renderHero(){
       <div class="eyebrow">Welcome back,</div>
       <h2>${escapeHtml(roleLabel)} 👋</h2>
       <div class="sub">Manage faculty, subjects, rooms, and class schedules in one place.</div>
+      <div class="hero-tagline">Educate. Empower. Excel.</div>
     </div>
   `;
 }
